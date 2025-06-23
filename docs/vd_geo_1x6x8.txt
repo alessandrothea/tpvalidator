@@ -1,0 +1,297 @@
+Geometry Inspector
+
+Cryostat ID : C:0
+ - origin = (0.04,-1.13687e-13,448.26)
+ - x-range = [-425.12, 425.2]
+ - y-range = [-753.922, 753.922]
+ - z-range = [-107.12, 1003.64]
+Total number of TPCs 48
+TPC ID : 0
+ - origin = (0.04,-588.452,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =0)
+TPC ID : 1
+ - origin = (0.04,-420.752,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =864)
+TPC ID : 2
+ - origin = (0.04,-252.051,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =1728)
+TPC ID : 3
+ - origin = (0.04,-84.3503,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =2592)
+TPC ID : 4
+ - origin = (0.04,84.3503,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =3456)
+TPC ID : 5
+ - origin = (0.04,252.051,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =4320)
+TPC ID : 6
+ - origin = (0.04,420.751,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =5184)
+TPC ID : 7
+ - origin = (0.04,588.452,74.96)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [0.5, 149.42]
+ - N Channels = 864 (First channel =6048)
+TPC ID : 8
+ - origin = (0.04,-588.452,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =6912)
+TPC ID : 9
+ - origin = (0.04,-420.752,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =7776)
+TPC ID : 10
+ - origin = (0.04,-252.051,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =8640)
+TPC ID : 11
+ - origin = (0.04,-84.3503,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =9504)
+TPC ID : 12
+ - origin = (0.04,84.3503,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =10368)
+TPC ID : 13
+ - origin = (0.04,252.051,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =11232)
+TPC ID : 14
+ - origin = (0.04,420.751,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =12096)
+TPC ID : 15
+ - origin = (0.04,588.452,223.88)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [149.42, 298.34]
+ - N Channels = 864 (First channel =12960)
+TPC ID : 16
+ - origin = (0.04,-588.452,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =13824)
+TPC ID : 17
+ - origin = (0.04,-420.752,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =14688)
+TPC ID : 18
+ - origin = (0.04,-252.051,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =15552)
+TPC ID : 19
+ - origin = (0.04,-84.3503,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =16416)
+TPC ID : 20
+ - origin = (0.04,84.3503,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =17280)
+TPC ID : 21
+ - origin = (0.04,252.051,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =18144)
+TPC ID : 22
+ - origin = (0.04,420.751,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =19008)
+TPC ID : 23
+ - origin = (0.04,588.452,373.8)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [299.34, 448.26]
+ - N Channels = 864 (First channel =19872)
+TPC ID : 24
+ - origin = (0.04,-588.452,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =20736)
+TPC ID : 25
+ - origin = (0.04,-420.752,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =21600)
+TPC ID : 26
+ - origin = (0.04,-252.051,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =22464)
+TPC ID : 27
+ - origin = (0.04,-84.3503,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =23328)
+TPC ID : 28
+ - origin = (0.04,84.3503,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =24192)
+TPC ID : 29
+ - origin = (0.04,252.051,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =25056)
+TPC ID : 30
+ - origin = (0.04,420.751,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =25920)
+TPC ID : 31
+ - origin = (0.04,588.452,522.72)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [448.26, 597.18]
+ - N Channels = 864 (First channel =26784)
+TPC ID : 32
+ - origin = (0.04,-588.452,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =27648)
+TPC ID : 33
+ - origin = (0.04,-420.752,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =28512)
+TPC ID : 34
+ - origin = (0.04,-252.051,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =29376)
+TPC ID : 35
+ - origin = (0.04,-84.3503,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =30240)
+TPC ID : 36
+ - origin = (0.04,84.3503,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =31104)
+TPC ID : 37
+ - origin = (0.04,252.051,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =31968)
+TPC ID : 38
+ - origin = (0.04,420.751,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =32832)
+TPC ID : 39
+ - origin = (0.04,588.452,672.64)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [598.18, 747.1]
+ - N Channels = 864 (First channel =33696)
+TPC ID : 40
+ - origin = (0.04,-588.452,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [-672.302, -504.602]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =34560)
+TPC ID : 41
+ - origin = (0.04,-420.752,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [-504.602, -336.901]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =35424)
+TPC ID : 42
+ - origin = (0.04,-252.051,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [-335.901, -168.201]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =36288)
+TPC ID : 43
+ - origin = (0.04,-84.3503,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [-168.201, -0.5]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =37152)
+TPC ID : 44
+ - origin = (0.04,84.3503,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [0.5, 168.201]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =38016)
+TPC ID : 45
+ - origin = (0.04,252.051,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [168.201, 335.901]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =38880)
+TPC ID : 46
+ - origin = (0.04,420.751,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [336.901, 504.602]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =39744)
+TPC ID : 47
+ - origin = (0.04,588.452,821.56)
+ - x-range = [-325, 325.08]
+ - y-range = [504.602, 672.302]
+ - z-range = [747.1, 896.02]
+ - N Channels = 864 (First channel =40608)
+MaxTPCSet 48
