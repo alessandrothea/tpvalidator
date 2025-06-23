@@ -15,9 +15,14 @@ TP_BRANCHES = ["event", "n_TPs", "TP_channel", "TP_startT", "TP_peakT", "TP_peak
 
 
 @click.command()
+@click.option("-o", "--output", type=str, default=None)
 @click.argument("data_path", type=click.Path(exists=True))
-def main(data_path) -> None:
+def main(data_path, output) -> None:
     print("Hello from tpvalidator!")
+
+    data_path = Path(data_path)
+    report_name = output if not output is None else f'tp_val_{data_path.stem}.pdf'
+
 
     df_tps = load_data(data_path, branch_names=TP_BRANCHES)
     df_mc = load_data(data_path, branch_names=MC_BRANCHES)
@@ -42,7 +47,7 @@ def main(data_path) -> None:
     df_mc['phi_ind_u'] = phi_ind_u
     df_mc['phi_ind_v'] = phi_ind_v
 
-    with PdfPages('multipage_output_pdf.pdf') as pdf:
+    with PdfPages(report_name) as pdf:
         df_all.hist(bins=100, figsize=(11.69,8.27), color='g')
         plt.tight_layout()
         pdf.savefig()
