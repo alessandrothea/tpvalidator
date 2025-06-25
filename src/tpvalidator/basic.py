@@ -156,6 +156,7 @@ def main(data_path, interactive, output) -> None:
                 ax.scatter(tps.TP_trueY, tps.TP_trueZ, tps.TP_trueX, s=tps.TP_TOT/2, c=tps.TP_SADC, vmin=vmin, vmax=vmax)
 
                 # Add projections on the YZ plane (CRP) and XY plane (collection/drift)
+                ax.scatter(np.full_like(tps.TP_trueY, ranges.TP_trueY[0]), tps.TP_trueZ, tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
                 ax.scatter(tps.TP_trueY, tps.TP_trueZ, np.full_like(tps.TP_trueX, ranges.TP_trueX[0]), s=tps.TP_TOT/2, c='gray')
                 ax.scatter(tps.TP_trueY, np.full_like(tps.TP_trueZ, ranges.TP_trueZ[1]), tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
 
@@ -163,11 +164,11 @@ def main(data_path, interactive, output) -> None:
                 ax.set_ylim3d(*list(ranges.TP_trueZ))
                 ax.set_zlim3d(*list(ranges.TP_trueX))
 
-                ax.set_xlabel("y")
-                ax.set_ylabel("z")
-                ax.set_zlabel("x")
+                ax.set_xlabel("y (collection)")
+                ax.set_ylabel("z (beam)")
+                ax.set_zlabel("x (drift)")
                 ax.set_title(ev_label)
-            fig.tight_layout()
+            fig.tight_layout(rect=[0., 0., 0.95, 1])
             pdf.savefig()
 
 
