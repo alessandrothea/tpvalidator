@@ -75,6 +75,19 @@ def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
     return vector / np.linalg.norm(vector)
 
+def wrap_phi(a):
+    conds = [
+        a > 90,
+        a < -90,
+    ]
+
+    choices = [
+        a - 180,
+        a + 180
+    ]
+    return abs(a)
+    return np.select(conds, choices, default=a)
+
 
 def calculate_angles_2(px, py, pz, p_mag):
     """
@@ -82,68 +95,63 @@ def calculate_angles_2(px, py, pz, p_mag):
 
     1. angle between p and drift direction
     2. angle between p and collection wire direction
+    2. angle between p and induction wires direction
 
 
     Note about VD geometry
     - z is the direction of the beam
     - The drift direction is upward/downward : x, in vd coordinates
-    - y is the direction of collection wires
-
-
-
-
+    - y is the direction of collection strips on plane X (hd) or Z (vd)
+    - u, the direction of the first induction plane strips is (0, -0.5, 0.866) in LArSoft
+    - v, the direction of the first induction plane strips is (0, -0.5, -0.866) in LArSoft
 
 
     θ_y (angle w.r.t vertical y-axis --> *should* align with collection plane orientation in hd),
-    θ_U (angle w.r.t U-plane wires at +37.5°),
+    θ_U (angle w.r.t U-plane wires at +37.5° in hd),
     θ_V (angle w.r.t V-plane wires at -37.5°),
     Based on momentum of the MC particles in x,y,z directions 
         
     Returns:
-    theta_y, theta_U, theta_V, theta_xz, theta_xz_U, theta_xz_V (all in degrees)
+    theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v (all in degrees)
     """
 
-    angle_ind  = np.radians(30) # degrees
+    angle_ind  = np.radians(-30) # degrees
     sin_ind  = np.sin(angle_ind)
     cos_ind  = np.cos(angle_ind)
     # unitary vectors for each plane
     e_coll = [0,1,0]
 
+    # Define induction wires vector basis
     e_ind_u = [0, sin_ind, cos_ind]
-    k_ind_u = [0, cos_ind, -sin_ind]
+    k_ind_u = [0, -cos_ind, sin_ind]
 
-    e_ind_v = [0, sin_ind, -cos_ind]
-    k_ind_v = [0, cos_ind, sin_ind]
+    # e_ind_v = [0, sin_ind, -cos_ind]
+    # k_ind_v = [0, cos_ind, sin_ind]
 
+    # angle_ind  = np.radians(-150) # degrees
+    angle_ind  = np.radians(30) # degrees
+    sin_ind  = np.sin(angle_ind)
+    cos_ind  = np.cos(angle_ind)
+    e_ind_v = [0, sin_ind, cos_ind]
+    k_ind_v = [0, -cos_ind, sin_ind]
+
+    # Calculate prokections on all axes
     pe_ind_u = e_ind_u[1]*py+e_ind_u[2]*pz
     pk_ind_u = k_ind_u[1]*py+k_ind_u[2]*pz
 
     pe_ind_v = e_ind_v[1]*py+e_ind_v[2]*pz
     pk_ind_v = k_ind_v[1]*py+k_ind_v[2]*pz
 
-    # p_yz = np.stack((py, pz), axis=1)
-    # p_yz_mag = np.linalg.norm(p_yz, axis=1)
 
+    theta_u = np.degrees(np.arccos(pe_ind_u / p_mag))
+    theta_v = np.degrees(np.arccos(pe_ind_v / p_mag))
 
-    def wrap_phi(a):
-        conds = [
-            a > 90,
-            a < -90,
-        ]
-
-        choices = [
-            a - 180,
-            a + 180
-        ]
-
-        return np.select(conds, choices, default=a)
-
-    phi_coll = wrap_phi(np.degrees(np.arctan2( pz, py )))
-    phi_ind_u = wrap_phi(np.degrees(np.arctan2( pk_ind_u, pe_ind_u )))
-    phi_ind_v = wrap_phi(np.degrees(np.arctan2( pk_ind_v, pe_ind_v )))
+    phi_coll = wrap_phi(np.degrees(np.arctan2 ( pz      , px )))
+    phi_ind_u = wrap_phi(np.degrees(np.arctan2( pk_ind_u, px )))
+    phi_ind_v = wrap_phi(np.degrees(np.arctan2( pk_ind_v, px )))
 
     theta_drift = np.degrees(np.arccos(px / p_mag))
     theta_coll = np.degrees(np.arccos(py / p_mag))
     theta_beam = np.degrees(np.arccos(pz / p_mag))
 
-    return theta_drift, theta_beam, theta_coll, phi_coll, phi_ind_u, phi_ind_v
+    return theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v
