@@ -16,10 +16,10 @@ def test_angles():
     theta_y, theta_y_U, theta_y_V, theta_xz, theta_xz_U, theta_xz_V = calculate_angles(px,py,pz,p_mag)
 
     print("# Calculate Angles")
-    print(f"theta_y = {theta_y}")
-    print(f"theta_y_U = {theta_y_U}")
-    print(f"theta_y_V = {theta_y_V}")
-    print(f"theta_xz = {theta_xz}")
+    print(f"theta_y    = {theta_y}")
+    print(f"theta_y_U  = {theta_y_U}")
+    print(f"theta_y_V  = {theta_y_V}")
+    print(f"theta_xz   = {theta_xz}")
     print(f"theta_xz_U = {theta_xz_U}")
     print(f"theta_xz_V = {theta_xz_V}")
 

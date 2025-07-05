@@ -2,6 +2,8 @@ import uproot
 import awkward as ak
 import pandas as pd
 import numpy as np
+import json
+from typing import Tuple, Optional, Union, Sequence, Dict
 
 def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: list = None, max_events=None) -> pd.DataFrame:
     """
@@ -16,10 +18,6 @@ def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: 
         pd.DataFrame: _description_
     """
     try:
-        # with uproot.open(file_path) as file:
-        #     tree = file["triggerana/tree"]
-        #     arrays = tree.arrays(branch_names, library="ak", entry_stop=max_events)
-        #     return ak.to_dataframe(arrays)
         with uproot.open(f'{file_path}:{tree_name}') as tree:
             arrays = tree.arrays(branch_names, library="ak", entry_stop=max_events)
             return ak.to_dataframe(arrays)
@@ -28,6 +26,25 @@ def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: 
         print(f"Error loading data from {file_path}: {e}")
         return None
     
+
+def load_metadata(file_path: str, meta_name: str = 'triggerana/settings') -> Dict:
+    """Laod settings from tpgtree file and converts them into a python dictionary
+
+    Args:
+        file_path (str): _description_
+        meta_name (str, optional): _description_. Defaults to 'triggerana/settings'.
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        with uproot.open(f'{file_path}:{meta_name}') as meta_data:
+            json_data = meta_data.members['fTitle']
+            return json.loads(json_data)
+    
+    except Exception as e:
+        print(f"Error loading data from {file_path}: {e}")
+        return None
 
 
 def calculate_angles(px, py, pz, p_mag):
@@ -155,3 +172,63 @@ def calculate_angles_2(px, py, pz, p_mag):
     theta_beam = np.degrees(np.arccos(pz / p_mag))
 
     return theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v
+
+
+def compute_histogram_ratio(
+    numerator_data: Union[np.ndarray, Sequence[float]],
+    denominator_data: Union[np.ndarray, Sequence[float]],
+    bins: Union[int, Sequence[float]] = 50,
+    range: Optional[Tuple[float, float]] = None,
+    zero_division: float = np.nan
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute the bin-wise ratio of two histograms from raw data arrays,
+    including propagated Poisson errors.
+
+    Parameters:
+    ----------
+    numerator_data : array-like
+        Raw data for the numerator histogram.
+    denominator_data : array-like
+        Raw data for the denominator histogram.
+    bins : int or sequence of scalars
+        Number of bins or bin edges to use (passed to np.histogram).
+    range : tuple, optional
+        Lower and upper range of the bins.
+    zero_division : float
+        Value to use where division by zero occurs.
+
+    Returns:
+    -------
+    bin_centers : np.ndarray
+        Centers of the bins.
+    ratio : np.ndarray
+        Ratio of counts (numerator / denominator) per bin.
+    ratio_err : np.ndarray
+        Propagated error on the ratio per bin.
+    bins : np.ndarray
+        Bin edges used.
+    """
+    num_counts, bins = np.histogram(numerator_data, bins=bins, range=range)
+    denom_counts, _ = np.histogram(denominator_data, bins=bins, range=range)
+
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = np.true_divide(num_counts, denom_counts)
+        ratio[~np.isfinite(ratio)] = zero_division
+
+        # Assume Poisson: σ = sqrt(N)
+        num_err = np.sqrt(num_counts)
+        denom_err = np.sqrt(denom_counts)
+
+        # Avoid divide-by-zero in error propagation
+        safe_num = np.maximum(num_counts, 1)
+        safe_denom = np.maximum(denom_counts, 1)
+
+        ratio_err = ratio * np.sqrt(
+            (num_err / safe_num)**2 + (denom_err / safe_denom)**2
+        )
+        ratio_err[~np.isfinite(ratio_err)] = 0
+
+    return bin_centers, ratio, ratio_err, bins
