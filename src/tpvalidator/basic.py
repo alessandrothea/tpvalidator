@@ -3,7 +3,7 @@ from pathlib import Path
 from rich import print
 import math
 
-from .utilities import load_data, load_metadata, calculate_angles, calculate_angles_2, compute_histogram_ratio
+from .utilities import load_data, load_info, calculate_angles, calculate_more_angles, compute_histogram_ratio
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -43,21 +43,36 @@ class BasicTPData:
 
     def __init__(self, data_path: Path):
 
-        self.events = load_data(data_path, branch_names=['event'])
 
-        self.tps = load_data(data_path, branch_names=TP_BRANCHES)
-        self.mc = load_data(data_path, branch_names=MC_BRANCHES)
-        self.all = load_data(data_path)
+        self.data_path = data_path
+
+        # FIXME: The same ROOT file is opened 5 times, and the same tree is accessed 4 times.
+        # Maybe we can do something better
+        self.info = load_info(data_path)
+
+        self.events = load_data(data_path, tree_name='triggerana/tree', branch_names=['event'])
+
+        self.tps = load_data(data_path, tree_name='triggerana/tree', branch_names=TP_BRANCHES)
+        self.mc = load_data(data_path, tree_name='triggerana/tree', branch_names=MC_BRANCHES)
+        self.all = load_data(data_path, tree_name='triggerana/tree')
+
+        self.ides = load_data(data_path, 'triggerana/qtree')
+        self.waveforms = {}
 
         self._init_angles()
 
-        self.info = load_metadata(data_path)
-
-
     def _init_angles(self) -> None:
+       
+        match self.detector_name():
+            case 'dunevd10kt_3view_30deg_v5_refactored_1x8x6ref':
+                det_type = 'vd'
+            case _ as det_name:
+                raise ValueError(f'detector type of detector {det_name} unknown')
+            
+
         self.angles = self.mc[['event']].copy(deep=True)
 
-        theta_y, theta_y_U, theta_y_V, theta_xz, theta_xz_U, theta_xz_V = calculate_angles(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P)
+        theta_y, theta_y_U, theta_y_V, theta_xz, theta_xz_U, theta_xz_V = calculate_angles(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P, det_type)
         self.angles['theta_y'] = theta_y
         self.angles['theta_yU'] = theta_y_U
         self.angles['theta_yV'] = theta_y_V
@@ -65,7 +80,7 @@ class BasicTPData:
         self.angles['theta_xzU'] = theta_xz_U
         self.angles['theta_xzV'] = theta_xz_V
 
-        theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v = calculate_angles_2(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P)
+        theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v = calculate_more_angles(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P)
         self.angles['theta_drift'] = theta_drift
         self.angles['theta_beam'] = theta_beam
         self.angles['theta_coll'] = theta_coll
@@ -75,17 +90,52 @@ class BasicTPData:
         self.angles['phi_ind_u'] = phi_ind_u
         self.angles['phi_ind_v'] = phi_ind_v
 
-    def find_axis_aligned_events(self):
-        """Returns the 3 events with the highest combination of 
-           energy and alignment to the x, y and z detector axis.
+    def detector_name(self):
+        print(self.info)
+        if 'geo' in self.info:
+            return self.info['geo']['detector']
+        elif 'detector' in self.info:
+            return self.info['detector']
+        else:
+            raise KeyError(f"Unable to find detector name in tpg processing info")
+        
+    def tp_algorithm(self):
+        return self.info['tpg']['tool']
+    
 
-        Returns:
-            _type_: _description_
-        """
-        return [
-            int(self.mc[(s / self.mc.P).abs() > 0.95].sort_values('P', ascending=False).iloc[0]['event'])
-            for s in (self.mc.Px, self.mc.Py, self.mc.Pz)
-        ]
+    def tp_threshold(self, plane: int):
+        if plane in [0,1,2]:
+            return self.info['tpg'][f'threshold_tpg_plane{plane}']
+        else:
+            return ValueError(f"Invalid plane id: {plane}")
+        
+    def tp_backtracker_offset(self, plane: int):
+        plane_map = {
+            0: 'U_window_offset',
+            1: 'V_window_offset',
+            2: 'X_window_offset',
+        }
+
+        if not plane in plane_map:
+            return KeyError(f"Plane '{plane}' not known")
+        
+        return self.info['tptree'][plane_map[plane]]
+
+
+### Helper functions
+
+def find_axis_aligned_events(tp_data):
+    """Returns the 3 events with the highest combination of 
+    energy and alignment to the x, y and z detector axis.
+
+    Returns:
+        _type_: _description_
+    """
+    return [
+        int(tp_data.mc[(s / tp_data.mc.P).abs() > 0.95].sort_values('P', ascending=False).iloc[0]['event'])
+        for s in (tp_data.mc.Px, tp_data.mc.Py, tp_data.mc.Pz)
+    ]
+
 
 ## Report plots
 
@@ -150,9 +200,14 @@ def draw_tps_point_of_origin(ax : plt.Axes, tp_data: BasicTPData, ev_num: int, e
     vmax = tp_data.tps[(tp_data.tps.event == ev_num) & (tp_data.tps.TP_signal == 1)].TP_SADC.max()/5
     vmin = tp_data.tps[(tp_data.tps.event == ev_num) & (tp_data.tps.TP_signal == 1)].TP_SADC.min()
 
-    tps = tp_data.tps[(tp_data.tps.event == ev_num)]
+
+    tps_selection = (tp_data.tps.event == ev_num)
     if not is_signal is None:
-        tps = tps[tp_data.tps.TP_signal == is_signal]
+        tps_selection &= tp_data.tps.TP_signal == is_signal
+    tps=tp_data.tps[tps_selection]
+    # tps = tp_data.tps[(tp_data.tps.event == ev_num)]
+    # if not is_signal is None:
+        # tps = tps[tp_data.tps.TP_signal == is_signal]
 
     # equalize the range
     ranges = equalize_ranges(tps[['TP_trueX', 'TP_trueY', 'TP_trueZ']])
@@ -179,7 +234,7 @@ def draw_tps_point_of_origin(ax : plt.Axes, tp_data: BasicTPData, ev_num: int, e
 def plot_3dev_points_of_origin(tp_data: BasicTPData, figsize=a4_landscape, title_size=None) -> Figure:
     """
     """
-    events=tp_data.find_axis_aligned_events()
+    events=find_axis_aligned_events(tp_data)
     # Event display 3d
     vmax = tp_data.tps[(tp_data.tps.event.isin(events)) & (tp_data.tps.TP_signal == 1)].TP_SADC.max()/5
     vmin = tp_data.tps[(tp_data.tps.event.isin(events)) & (tp_data.tps.TP_signal == 1)].TP_SADC.min()
@@ -196,7 +251,7 @@ def plot_3dev_points_of_origin(tp_data: BasicTPData, figsize=a4_landscape, title
     Particle direction parallel to $\\hat{{{l}}}$
     $E_{{kin}}={float(ev_row['Ekin'].values):.2f}$ MeV
     $P_{l}$={float(Pax.values)*1000:.2f} MeV
-    Particle origin: ({float(ev_row['startX']):.1f}, {float(ev_row['startY']):.1f}, {float(ev_row['startZ']):.1f})
+    Particle origin: ({float(ev_row['startX'].values):.1f}, {float(ev_row['startY'].values):.1f}, {float(ev_row['startZ'].values):.1f})
     """)
 
 
@@ -247,7 +302,7 @@ def plot_3dev_plane_view(tp_data: BasicTPData, figsize=a4_landscape, title_size=
     #-----
     # Event display
 
-    events=tp_data.find_axis_aligned_events()
+    events=find_axis_aligned_events(tp_data)
     title=['U','V', "X"]
     # TODO: move to BasicTPDataClass
     vmax = tp_data.tps[(tp_data.tps.event.isin(events)) & (tp_data.tps.TP_signal == 1)].TP_SADC.max()/5

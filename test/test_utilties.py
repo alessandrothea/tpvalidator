@@ -1,6 +1,6 @@
 import numpy as np
 
-from tpvalidator.utilities import calculate_angles, calculate_angles_2
+from tpvalidator.utilities import calculate_angles, calculate_more_angles
 def test_angles():
     
 
@@ -24,7 +24,7 @@ def test_angles():
     print(f"theta_xz_V = {theta_xz_V}")
 
 
-    theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v = calculate_angles_2(px,py,pz,p_mag)
+    theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v = calculate_more_angles(px,py,pz,p_mag)
 
     print("\n"*2)
     print("# Calculate Angles 2")

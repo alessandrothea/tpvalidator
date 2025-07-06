@@ -4,18 +4,25 @@ import pandas as pd
 import numpy as np
 import json
 from typing import Tuple, Optional, Union, Sequence, Dict
+from rich import print
 
-def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: list = None, max_events=None) -> pd.DataFrame:
+_tpgtree_folder_name = 'triggerana'
+_tpgtree_tp_tree_name = 'tree'
+_tpgtree_charge_tree_name = 'q_tree'
+_tpgtree_rawdigits_tree_name = 'rawdigis_tree'
+
+def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: Optional[list] = None, max_events=None) -> pd.DataFrame:
     """
     Loads data from a ROOT tree into a Pandas Dataframe after expanding vectors into rows.
 
     Args:
-        file_path (str): path to the root file containg the ROOT tree
-        branch_names (list): _description_
-        max_events (int, optional): _description_. Defaults to 1000.
+        file_path (str): path to the ROOT file containg the ROOT tree
+        tree_name (str): name or path of the tree in the ROOT file
+        branch_names (list): branches to import in the dataframe. 
+        max_events (int, optional): maximum number of events. Defaults to None.
 
     Returns:
-        pd.DataFrame: _description_
+        pd.DataFrame: DataFrame containing the expanded tree data with vectors expanded into rows.
     """
     try:
         with uproot.open(f'{file_path}:{tree_name}') as tree:
@@ -27,27 +34,117 @@ def load_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: 
         return None
     
 
-def load_metadata(file_path: str, meta_name: str = 'triggerana/settings') -> Dict:
-    """Laod settings from tpgtree file and converts them into a python dictionary
+def load_info(file_path: str, info_name: str = 'triggerana/info') -> Dict:
+    """Laod processing information from tpgtree file as a python dictionary
 
     Args:
-        file_path (str): _description_
-        meta_name (str, optional): _description_. Defaults to 'triggerana/settings'.
+        file_path (str): path to the root file
+        info_name (str, optional): . Defaults to 'triggerana/info'.
 
     Returns:
-        _type_: _description_
+        dict: Dictionary containing tpg processing information
     """
     try:
-        with uproot.open(f'{file_path}:{meta_name}') as meta_data:
+        with uproot.open(f'{file_path}:{info_name}') as meta_data:
             json_data = meta_data.members['fTitle']
             return json.loads(json_data)
     
     except Exception as e:
-        print(f"Error loading data from {file_path}: {e}")
+        print(f"Error loading info from {file_path}: {e}")
         return None
 
 
-def calculate_angles(px, py, pz, p_mag):
+def load_sparse_waveform_data(file_path: str, tree_name: str = 'triggerana/rawdigis_tree', ev_sel: Union[int, list] = 1):
+    """Loads sparse rawdigits waveforms for a specific event from a ROOT file.
+
+    Args:
+        ev_num (int): Event number to load waveforms for.
+        file_path (str): Path to the ROOT file containing the data.
+        tree_name (str, optional): Name of the tree in the ROOT file. Defaults to 'triggerana/rawdigis_tree'.
+
+    Returns:
+        pd.DataFrame or None: DataFrame containing the waveforms for the specified event, or None if not found or on error.
+
+    """
+
+    def find_active_channels_branch(tree):
+
+        branch_names = tree.keys()
+        
+        for name in ['active_channels', 'chans_with_electrons']:
+            if name in branch_names:
+                return name
+        return None
+
+    try:
+        with uproot.open(f'{file_path}:{tree_name}') as tree:
+
+            activ_chans_branch = find_active_channels_branch(tree)
+            if activ_chans_branch is None:
+                raise RuntimeError(f"Active channel branch not found in tree. This doesn't look like a sparse waveform tree")
+            branches = ["event", "run", "subrun"]+[activ_chans_branch]
+            
+            df_evs = tree.arrays(branches, library='pd')
+
+            print(df_evs.event.values)
+            print(ev_sel)
+
+            if not (type(ev_sel) == int and ev_sel == 1):
+                raise RuntimeError("Only the loading of the first event is supported")
+            
+
+            # # TODO: support list of events
+            # if not (df_evs.event == ev_sel).any():
+            #     # Event not present in the list
+            #     return None
+            
+            ev_num = df_evs.event[0]
+
+
+            # extract the list of channels with stingal from the 'chans_with_electrons' branch
+            chans = ([ c for c in df_evs[df_evs.event == ev_num][activ_chans_branch][0]])
+            arrays = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans])
+            df_waveforms = ak.to_dataframe(arrays)
+            df_waveforms.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df_waveforms.columns]
+
+            df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
+            return df_waveforms
+        
+    except Exception as e:
+        print(f"Error loading sparse waveform data data from {file_path}: {e}")
+        return None
+
+
+def load_waveform_data(filepath, channel_ids, tree_name: str = 'triggerana/rawdigis_tree', max_events=1, first_event=0):
+    """
+    Load waveform data for specified channels from a ROOT file into a pandas DataFrame.
+
+    Args:
+        filepath (str): Path to the ROOT file containing waveform data.
+        channel_ids (list): List of channel IDs to load waveforms for.
+        tree_name (str, optional): Name of the tree in the ROOT file. Defaults to 'triggerana/rawdigis_tree'.
+        max_events (int, optional): Maximum number of events to load. Defaults to 1.
+        first_event (int, optional): Index of the first event to load. Defaults to 0.
+
+    Returns:
+        pd.DataFrame or None: DataFrame containing the waveform data for the specified channels, or None on error.
+    """
+    try:
+        branch_names = [f"{ch:d}" for ch in channel_ids ]
+        with uproot.open(f'{filepath}:{tree_name}') as tree:
+            arrays = tree.arrays(branch_names, library="ak", entry_stop=max_events)
+            df = ak.to_dataframe(arrays)
+            df.columns = [int(c) for c in df.columns]
+            df.index = np.arange(0, len(df))
+            return df
+        
+    except Exception as e:
+        print(f"Error loading data from {filepath}: {e}")
+        return None
+
+
+
+def calculate_angles(px, py, pz, p_mag, detector_type: str = 'hd'):
     """
     Calculate:
     θ_y (angle w.r.t vertical y-axis --> *should* align with collection plane orientation in hd),
@@ -67,8 +164,16 @@ def calculate_angles(px, py, pz, p_mag):
     theta_xz = np.degrees(np.arctan2(px, pz))
     
     # Rotation angles for U and V planes (±37.5 degrees in zy-plane)
-    theta_rot_U = np.radians(-37.5)  # U-plane rotation
-    theta_rot_V = np.radians(37.5)   # V-plane rotation
+    match detector_type:
+        case 'hd':
+            theta_rot_U = np.radians(-37.5)  # U-plane rotation
+            theta_rot_V = np.radians(37.5)   # V-plane rotation
+        case 'vd':
+            theta_rot_U = np.radians(-60.0)  # U-plane rotation
+            theta_rot_V = np.radians(60.0)   # V-plane rotation
+        case _:
+            raise ValueError(f'detector type {detector} not know')
+
     
     # Rotate momentum components in zy-plane for U-plane
     p_y_U = py * np.cos(theta_rot_U) - pz * np.sin(theta_rot_U)
@@ -106,7 +211,7 @@ def wrap_phi(a):
     return np.select(conds, choices, default=a)
 
 
-def calculate_angles_2(px, py, pz, p_mag):
+def calculate_more_angles(px, py, pz, p_mag):
     """
     Calculate:
 
@@ -132,6 +237,7 @@ def calculate_angles_2(px, py, pz, p_mag):
     theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v (all in degrees)
     """
 
+    # Induction strips/wires angle wrt z plane
     angle_ind  = np.radians(-30) # degrees
     sin_ind  = np.sin(angle_ind)
     cos_ind  = np.cos(angle_ind)
