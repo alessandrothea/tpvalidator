@@ -3,6 +3,7 @@ import awkward as ak
 import pandas as pd
 import numpy as np
 import json
+import math
 from typing import Tuple, Optional, Union, Sequence, Dict
 from rich import print
 
@@ -142,6 +143,43 @@ def load_waveform_data(filepath, channel_ids, tree_name: str = 'triggerana/rawdi
         print(f"Error loading data from {filepath}: {e}")
         return None
 
+
+###
+# 
+# Plotting utilities
+#
+###
+
+import matplotlib.pyplot as plt
+
+def get_hist_layout(n_items, layout=None):
+    if layout is not None:
+        return layout
+    ncols = math.ceil(math.sqrt(n_items))
+    nrows = math.ceil(n_items / ncols)
+    return (nrows, ncols)
+
+def subplot_autogrid(n_plots, **kwargs):
+    n_rows, n_cols = get_hist_layout(n_plots)
+
+    mosaic = []
+    i = 0
+    for _ in range(n_rows):
+        row = []
+        for _ in range(n_cols):
+            row.append(i if i < n_plots else '.')
+            i += 1
+        mosaic += [row]
+        
+    fig, ax = plt.subplot_mosaic(mosaic, **kwargs)
+    return fig, ax
+
+
+
+###
+# FIXME: Move to another file
+#
+###
 
 
 def calculate_angles(px, py, pz, p_mag, detector_type: str = 'hd'):

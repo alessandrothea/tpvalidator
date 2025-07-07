@@ -20,12 +20,6 @@ TP_BRANCHES = ["event", "n_TPs", "TP_channel", "TP_startT", "TP_peakT", "TP_peak
 a4_landscape = (11.69,8.27)
 a5_landscape = (8.27,5.85)
 
-def get_hist_layout(n_items, layout=None):
-    if layout is not None:
-        return layout
-    ncols = math.ceil(math.sqrt(n_items))
-    nrows = math.ceil(n_items / ncols)
-    return (nrows, ncols)
 
 def equalize_ranges(df) -> pd.DataFrame:
     x = df.agg(['min', 'max'])
