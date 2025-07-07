@@ -1,6 +1,5 @@
-import rich
+from rich import print
 import matplotlib
-
 from .basic import BasicTPData
 from .utilities import subplot_autogrid
 import matplotlib.pyplot as plt
@@ -24,7 +23,7 @@ class BackTrackerPlotter:
         self.tp_thresholds = [self.data.tp_threshold(p) for p in range(3)]
         self.waveforms = self.data.waveforms.get(ev_num, None)
         if self.waveforms is None:
-            rich.print(f"[yellow]Warning: no waveform data found in {self.data.data_path} for event {ev_num}[/yellow]")
+            print(f"[yellow]Warning: no waveform data found in {self.data.data_path} for event {ev_num}[/yellow]")
 
 
     def plot_tps_vs_ides( self, tp_ids: list, layout:str = 'grid', figsize=(10, 10)):
@@ -78,8 +77,10 @@ class BackTrackerPlotter:
             xmin, xmax = ax.get_xlim()
             ax.set_xlim(min(xmin, tp_start), max(xmax, tp_end))
 
+            ax.set_xlabel("sample")
+            ax.set_ylabel("n electrons$")
             if waves is None:
-                print(f"No waveforms found for event '{self.ev_num}'")
+                print(f"[yellow]No waveforms found for event '{self.ev_num}[/yellow]'")
             else:
                 from mpl_axes_aligner import shift
                 shift.yaxis(ax, 0, 0.6, True)
@@ -98,6 +99,7 @@ class BackTrackerPlotter:
                 ax_2.axhline(y=wf_mean+tp_thresholds[tp_plane], color=thres_color, linewidth=1)
 
                 shift.yaxis(ax_2, wf_mean, 0.2, True)
+                ax_2.set_ylabel("adc$")
 
 
             # Fixme use the sample id
@@ -132,9 +134,11 @@ class BackTrackerPlotter:
             ax.legend(lns+[rect_tp, rect_match], [l.get_label() for l in lns]+['TP', 'match win'], loc=0)
 
             ax.set_title(f"ch {int(tp.TP_channel)}, plane {int(tp.TP_plane)} ")
+        
+        fig.suptitle(f"Event {self.ev_num}", fontsize=16)
 
 
-        display(selected_tps)
+        self.selected_tps = selected_tps
         #fig.tight_layout()
         # return selected_tps
         return fig
