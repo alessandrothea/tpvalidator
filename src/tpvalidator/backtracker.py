@@ -46,8 +46,10 @@ class BackTrackerPlotter:
         # Color selection
         colors = matplotlib.colormaps['tab20'].colors
         ide_color = colors[0]
+        ide_color_fill = colors[1]
         wave_color = colors[2]
         thres_color = colors[6]
+        thres_fill_color = colors[7]
         tp_color = colors[7]
         match_color = colors[8]
 
@@ -71,7 +73,7 @@ class BackTrackerPlotter:
             # Plot IDE data
             q_ch = self.data.ides[(self.data.ides['event'] == self.ev_num) & (self.data.ides.channel == ch_id)]
             lns = ax.plot(q_ch.time, q_ch.nElectrons, label='n$_{el}$', color=ide_color)
-
+            ax.fill_between(q_ch.time, 0, q_ch.nElectrons, color=ide_color_fill)
             ax.axhline(y=0, color='black', linewidth=1)
 
             xmin, xmax = ax.get_xlim()
@@ -87,6 +89,7 @@ class BackTrackerPlotter:
 
                 ## FIXME: using the position as sample_id
                 wf = waves.reset_index()[ch_id]
+                wf_mean = wf.mean()
 
                 xmin, xmax = ax.get_xlim()
                 ax_2 = ax.twinx()
@@ -94,9 +97,13 @@ class BackTrackerPlotter:
                 wf_zoom = wf.iloc[int(xmin):int(xmax)]
                 lns += ax_2.plot(wf_zoom.index, wf_zoom.values, label="adcs", color=wave_color)
 
-                wf_mean = wf.mean()
+
+                tp_thres = wf_mean+tp_thresholds[tp_plane];
+                ax_2.fill_between(wf_zoom.index, wf_zoom.where(wf_zoom < tp_thres, tp_thres).values, wf_zoom.values, color='red', alpha=0.3)
+
                 ax_2.axhline(y=wf_mean, color='black', linewidth=1)
                 ax_2.axhline(y=wf_mean+tp_thresholds[tp_plane], color=thres_color, linewidth=1)
+
 
                 shift.yaxis(ax_2, wf_mean, 0.2, True)
                 ax_2.set_ylabel("adc$")
