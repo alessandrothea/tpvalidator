@@ -18,7 +18,7 @@ class TriggerPrimitivesDataPool:
     TP_BRANCHES = [
         'n_TPs', 'TP_channel', 'TP_startT', 'TP_peakT', 'TP_peakADC', 
         'TP_SADC', 'TP_TOT', 'TP_plane', 'TP_TPC', 
-        'TP_trueX', 'TP_trueY', 'TP_trueZ', 'TP_true_n_el'
+        'TP_trueX', 'TP_trueY', 'TP_trueZ', 'TP_true_n_el',
         'TP_signal', 'TP_mcgen_key', 'TP_n_mcgen']
 
     _log = logging.getLogger('TriggerPrimitivesDataPool')
