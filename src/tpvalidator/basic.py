@@ -3,7 +3,7 @@ from pathlib import Path
 from rich import print
 import math
 
-from .utilities import load_data, load_info, calculate_angles, calculate_more_angles, compute_histogram_ratio
+from .utilities import load_data, load_info, load_event_list, calculate_angles, calculate_more_angles, compute_histogram_ratio
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -30,7 +30,7 @@ def equalize_ranges(df) -> pd.DataFrame:
 
     upper = med+max_rng/2
     lower = med-max_rng/2
-    return pd.concat([upper, lower], axis=1).T
+    return pd.concat([lower,upper], axis=1).T
 
 
 class BasicTPData:
@@ -74,13 +74,16 @@ class BasicTPData:
         self.angles['theta_xzU'] = theta_xz_U
         self.angles['theta_xzV'] = theta_xz_V
 
-        theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v = calculate_more_angles(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P)
+        theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_drift, phi_drift_u, phi_drift_v, phi_ind_u, phi_ind_v = calculate_more_angles(self.mc.Px, self.mc.Py, self.mc.Pz, self.mc.P)
         self.angles['theta_drift'] = theta_drift
         self.angles['theta_beam'] = theta_beam
         self.angles['theta_coll'] = theta_coll
         self.angles['theta_u'] = theta_u
         self.angles['theta_v'] = theta_v
         self.angles['phi_coll'] = phi_coll
+        self.angles['phi_drift'] = phi_drift
+        self.angles['phi_drift_u'] = phi_drift_u
+        self.angles['phi_drift_v'] = phi_drift_v
         self.angles['phi_ind_u'] = phi_ind_u
         self.angles['phi_ind_v'] = phi_ind_v
 
@@ -114,6 +117,11 @@ class BasicTPData:
             return KeyError(f"Plane '{plane}' not known")
         
         return self.info['tptree'][plane_map[plane]]
+    
+
+    def add_waveforms_file(self, data_path: str):
+        df_wf_ev = load_event_list(data_path, tree_name="triggerana/rawdigis_tree")
+
 
 
 ### Helper functions
@@ -204,20 +212,20 @@ def draw_tps_point_of_origin(ax : plt.Axes, tp_data: BasicTPData, ev_num: int, e
         # tps = tps[tp_data.tps.TP_signal == is_signal]
 
     # equalize the range
-    ranges = equalize_ranges(tps[['TP_trueX', 'TP_trueY', 'TP_trueZ']])
+    ax_ranges = equalize_ranges(tps[['TP_trueX', 'TP_trueY', 'TP_trueZ']])
     
     # Draw 3D points
     # ax.scatter(tps.TP_trueY, tps.TP_trueZ, tps.TP_trueX)
     ax.scatter(tps.TP_trueY, tps.TP_trueZ, tps.TP_trueX, s=tps.TP_TOT/2, c=tps.TP_SADC, vmin=vmin, vmax=vmax)
 
     # # Add projections on the YZ plane (CRP) and XY plane (collection/drift)
-    ax.scatter(np.full_like(tps.TP_trueY, ranges.TP_trueY[0]), tps.TP_trueZ, tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
-    ax.scatter(tps.TP_trueY, tps.TP_trueZ, np.full_like(tps.TP_trueX, ranges.TP_trueX[0]), s=tps.TP_TOT/2, c='gray')
-    ax.scatter(tps.TP_trueY, np.full_like(tps.TP_trueZ, ranges.TP_trueZ[1]), tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
+    ax.scatter(np.full_like(tps.TP_trueY, ax_ranges.TP_trueY[0]), tps.TP_trueZ, tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
+    ax.scatter(tps.TP_trueY, np.full_like(tps.TP_trueZ, ax_ranges.TP_trueZ[1]), tps.TP_trueX, s=tps.TP_TOT/2, c='gray')
+    ax.scatter(tps.TP_trueY, tps.TP_trueZ, np.full_like(tps.TP_trueX, ax_ranges.TP_trueX[0]), s=tps.TP_TOT/2, c='gray')
 
-    ax.set_xlim3d(*list(ranges.TP_trueY))
-    ax.set_ylim3d(*list(ranges.TP_trueZ))
-    ax.set_zlim3d(*list(ranges.TP_trueX))
+    ax.set_xlim3d(*list(ax_ranges.TP_trueY))
+    ax.set_ylim3d(*list(ax_ranges.TP_trueZ))
+    ax.set_zlim3d(*list(ax_ranges.TP_trueX))
 
     ax.set_xlabel("y (collection)")
     ax.set_ylabel("z (beam)")

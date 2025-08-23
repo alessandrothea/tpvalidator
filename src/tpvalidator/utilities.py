@@ -7,6 +7,22 @@ import math
 from typing import Tuple, Optional, Union, Sequence, Dict
 from rich import print
 
+from contextlib import contextmanager
+
+#
+# True utilities
+#
+@contextmanager
+def temporary_log_level(logger, level):
+    old_level = logger.level
+    logger.setLevel(level)
+    yield
+    logger.setLevel(old_level)
+
+
+
+# Move elsewhere
+
 _tpgtree_folder_name = 'triggerana'
 _tpgtree_tp_tree_name = 'tree'
 _tpgtree_charge_tree_name = 'q_tree'
@@ -52,6 +68,18 @@ def load_info(file_path: str, info_name: str = 'triggerana/info') -> Dict:
     
     except Exception as e:
         print(f"Error loading info from {file_path}: {e}")
+        return None
+    
+
+
+def load_event_list(file_path: str, tree_name: str):
+    try:
+        with uproot.open(f'{file_path}:{tree_name}') as tree:
+            branches = ["event", "run", "subrun"]
+            df_evs = tree.arrays(branches, library='pd')
+            return df_evs
+    except Exception as e:
+        print(f"Error loading sparse waveform data data from {file_path}: {e}")
         return None
 
 
@@ -204,13 +232,22 @@ def calculate_angles(px, py, pz, p_mag, detector_type: str = 'hd'):
     # Rotation angles for U and V planes (±37.5 degrees in zy-plane)
     match detector_type:
         case 'hd':
+            print("Using HD wire geometry (ϑ[y-u]=-37.5°, ϑ[y-v]=37.5°)")
             theta_rot_U = np.radians(-37.5)  # U-plane rotation
             theta_rot_V = np.radians(37.5)   # V-plane rotation
+        # case 'vd':
+            # print("Using VD strip geometry (ϑ[y-u]=60.0°, ϑ[y-v]=-60.0°)")
+
+            # theta_rot_U = np.radians(60.0)  # U-plane rotation
+            # theta_rot_V = np.radians(-60.0)   # V-plane rotation
         case 'vd':
-            theta_rot_U = np.radians(-60.0)  # U-plane rotation
-            theta_rot_V = np.radians(60.0)   # V-plane rotation
+
+            theta_rot_U = np.radians(60)  # U-plane rotation
+            theta_rot_V = np.radians(-60)   # V-plane rotation
+            print("Using VD strip geometry (ϑ[y-u]=30.0°, ϑ[y-v]=-30.0°)")
+
         case _:
-            raise ValueError(f'detector type {detector} not know')
+            raise ValueError(f'detector type {detector_type} not know')
 
     
     # Rotate momentum components in zy-plane for U-plane
@@ -226,6 +263,18 @@ def calculate_angles(px, py, pz, p_mag, detector_type: str = 'hd'):
     theta_xz_V = np.degrees(np.arctan2(px, p_z_V))
     theta_y_V = 90-np.degrees(np.arcsin(p_y_V / p_mag))
     #theta_y_V = (theta_y_V + 180) % 360 - 180
+
+    # theta_y = theta_y.where(theta_y < 90, 180-theta_y)
+    # theta_y_U = theta_y_U.where(theta_y_U < 90, 180-theta_y_U)
+    # theta_y_V = theta_y_V.where(theta_y_V < 90, 180-theta_y_V)
+
+
+    theta_y = 90-(90-theta_y).abs()
+    theta_xz = 90-(90-theta_xz.abs()).abs()
+    theta_y_U = 90-(90-theta_y_U).abs()
+    theta_xz_U = 90-(90-theta_xz_U.abs()).abs()
+    theta_y_V = 90-(90-theta_y_V).abs()
+    theta_xz_V = 90-(90-theta_xz_V.abs()).abs()
 
     return theta_y, theta_y_U, theta_y_V, abs(theta_xz), abs(theta_xz_U), abs(theta_xz_V)
 
@@ -315,7 +364,20 @@ def calculate_more_angles(px, py, pz, p_mag):
     theta_coll = np.degrees(np.arccos(py / p_mag))
     theta_beam = np.degrees(np.arccos(pz / p_mag))
 
-    return theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_ind_u, phi_ind_v
+    phi_drift = np.degrees(np.arctan2 ( py      , pz ))
+    phi_drift_u = np.degrees(np.arctan2 ( pe_ind_u, pk_ind_u ))
+    phi_drift_v = np.degrees(np.arctan2 ( pe_ind_v, pk_ind_v ))
+
+    # phi_drift_u = phi_drift+60
+    # phi_drift_u = phi_drift_u.where(phi_drift_u < 240., 360-phi_drift_u).abs()
+
+    theta_drift = 90-(90-theta_drift).abs()
+    phi_drift = 90-(90-phi_drift.abs()).abs()
+    phi_drift_u = 90-(90-phi_drift_u.abs()).abs()
+    phi_drift_v = 90-(90-phi_drift_v.abs()).abs()
+
+
+    return theta_drift, theta_beam, theta_coll, theta_u, theta_v, phi_coll, phi_drift, phi_drift_u, phi_drift_v, phi_ind_u, phi_ind_v
 
 
 def compute_histogram_ratio(
