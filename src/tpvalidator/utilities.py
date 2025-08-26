@@ -204,10 +204,31 @@ def subplot_autogrid(n_plots, **kwargs):
 
 
 
+
 ###
 # FIXME: Move to another file
 #
 ###
+
+
+def df_to_TP_rates(df_tp: pd.DataFrame) -> int:
+    '''
+    Calculate the TP rates from
+    '''
+    sampling_time = 0.5e-6 # Sampling time 1/2 usec
+    tot_samples_est = (df_tp.groupby('event').TP_peakT.max()-df_tp.groupby('event').TP_peakT.min()).sum()
+    tot_time_est = tot_samples_est*sampling_time
+    n_tps = len(df_tp)
+
+    # print(f"Integrated number of samples in the dataset (over all events): {tot_samples_est}")
+    # print(f"Integrated simulated time: {tot_samples_est*sampling_time} s")
+
+    # print(f"Integrated number of TPs: {n_tps}")
+
+
+
+
+    return n_tps/(tot_time_est) if tot_time_est > 0 else 0
 
 
 def calculate_angles(px, py, pz, p_mag, detector_type: str = 'hd'):

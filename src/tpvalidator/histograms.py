@@ -1,5 +1,6 @@
 from typing import Tuple, Optional, Union, Sequence, Dict
 import numpy as np
+import pandas as pd
 
 
 def compute_histogram_ratio(
@@ -106,3 +107,17 @@ def uproot_hist_mean_std(h):
 
     else:
         raise NotImplementedError("Only 1D and 2D histograms are supported for now")
+    
+
+def calculate_natural_bins( series : pd.Series, downsampling=10 ):
+
+    x_min=series.min()
+    x_max=series.max()
+
+    x_range=(x_max-x_min)
+    n_bins=int(x_range)//downsampling
+    dx = x_range/n_bins
+
+    bins = [ (x_min + i*dx) for i in range(n_bins+1)]
+
+    return bins
