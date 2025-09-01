@@ -19,7 +19,7 @@ from ..utilities import subplot_autogrid, df_to_TP_rates
 
 
 # TODO: review and move elsewhere?
-def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, figsize=(12,5)):
+def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_label='Signal', figsize=(12,5)):
 
     adc_hists = tpws.rawdigits_hists
 
@@ -65,7 +65,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, figsize=
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
     ax.axvline(thrs_5s, color='g', lw=v_lw)
-    ax.set_title('plane 0 [U]')
+    ax.set_title('Plane U [0] ')
 
     ax = axes[1]
     adc_hists['ADCsPlaneV'].to_hist().plot(ax=ax)
@@ -96,7 +96,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, figsize=
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
     ax.axvline(thrs_5s, color='g', lw=v_lw)
-    ax.set_title('plane 1 [V]')
+    ax.set_title('Plane V [1] ')
 
 
     ax = axes[2]
@@ -127,11 +127,11 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, figsize=
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
     ax.axvline(thrs_5s, color='g', lw=v_lw)
-    ax.set_title('plane 2 [X]')
+    ax.set_title('Plane X [2] ')
 
     for ax in axes:
         ax.set_yscale("log")
-        ax.legend(['Ar39', 'noise'])
+        ax.legend([signal_label, 'noise'])
 
     return fig
 
@@ -158,7 +158,7 @@ class TPSignalNoiseAnalyzer:
     def __init__(self, tp_selection: TPSignalNoisePreSelection):
         self.tps = tp_selection
 
-    def draw_tp_origin_2d_dist(self, figsize=(12,10)):
+    def draw_tp_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
         fig,axes= plt.subplots(3,3, figsize=figsize)
 
         # XY row
@@ -200,7 +200,7 @@ class TPSignalNoiseAnalyzer:
         self.tps.sig_p2.plot.scatter(x='TP_trueY', y='TP_trueZ', alpha=0.01, s=1, ax=ax)
         ax.set_title('YZ origin - Plane X [2]')
 
-        fig.suptitle("Ar39 TP point of origin on XY, XZ and YZ planes")
+        fig.suptitle(f"{signal_label} TP point of origin on XY, XZ and YZ planes")
 
         return fig
     

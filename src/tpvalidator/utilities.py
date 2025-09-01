@@ -132,8 +132,21 @@ def load_sparse_waveform_data(file_path: str, tree_name: str = 'triggerana/rawdi
 
             # extract the list of channels with stingal from the 'chans_with_electrons' branch
             chans = ([ c for c in df_evs[df_evs.event == ev_num][activ_chans_branch][0]])
-            arrays = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans])
-            df_waveforms = ak.to_dataframe(arrays)
+            print(f"found {len(chans)} channels")
+            # print("Loading akward array")
+            # arrays = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans])
+            # print("Done loading akward array")
+            # print("Converting akward array to dataframe")
+            # df_waveforms = ak.to_dataframe(arrays)
+            # print("Done converting akward array to dataframe")
+
+            print("Loading dataframe")
+            df_waveforms = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans], library='pd')
+            print("Done loading dataframe")
+            # print("Converting akward array to dataframe")
+            # df_waveforms = ak.to_dataframe(arrays)
+            # print("Done converting akward array to dataframe")
+
             df_waveforms.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df_waveforms.columns]
 
             df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
@@ -213,7 +226,7 @@ def subplot_autogrid(n_plots, **kwargs):
 
 def df_to_TP_rates(df_tp: pd.DataFrame) -> int:
     '''
-    Calculate the TP rates from
+    Calculate the TP rates from the TP dataframe
     '''
     sampling_time = 0.5e-6 # Sampling time 1/2 usec
     tot_samples_est = (df_tp.groupby('event').TP_peakT.max()-df_tp.groupby('event').TP_peakT.min()).sum()
@@ -224,9 +237,6 @@ def df_to_TP_rates(df_tp: pd.DataFrame) -> int:
     # print(f"Integrated simulated time: {tot_samples_est*sampling_time} s")
 
     # print(f"Integrated number of TPs: {n_tps}")
-
-
-
 
     return n_tps/(tot_time_est) if tot_time_est > 0 else 0
 
