@@ -133,6 +133,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
         ax.set_yscale("log")
         ax.legend([signal_label, 'noise'])
 
+    fig.tight_layout()
     return fig
 
 class TPSignalNoisePreSelection:
@@ -202,6 +203,7 @@ class TPSignalNoiseAnalyzer:
 
         fig.suptitle(f"{signal_label} TP point of origin on XY, XZ and YZ planes")
 
+        fig.tight_layout()
         return fig
     
     def draw_tp_drift_depth_dist(self, figsize=(12, 5)):
@@ -227,6 +229,7 @@ class TPSignalNoiseAnalyzer:
         ax.set_ylabel('counts')
 
         fig.suptitle("Ar39 TP true drift depth by plane")
+        fig.tight_layout()
         return fig
 
     def draw_tp_start_time_dist(self, figsize=(12,5)):
@@ -256,6 +259,7 @@ class TPSignalNoiseAnalyzer:
         ax.legend(['Signal', 'Noise'])
 
         fig.suptitle("Ar39 and Noise TPs distribution in peak time")
+        fig.tight_layout()
         return fig
     
     def draw_tp_signal_noise_dist(self, figsize=(12,5)):
@@ -285,6 +289,7 @@ class TPSignalNoiseAnalyzer:
             ax.legend(('Ar39+noise', 'Ar39', 'noise'))
 
         fig.suptitle(f"{', '.join(var_list)} distributions for : Ar39 vs electronics noise")
+        fig.tight_layout()
         return fig
     
 
@@ -315,6 +320,7 @@ class TPSignalNoiseAnalyzer:
             ax.set_title(f"x = ({i.left:.0f},{i.right:.0f})")
 
         fig.suptitle(col)
+        fig.tight_layout()
         return fig
     
     def draw_variable_in_drift_grid(self, var, n_x_bins=30, downsampling=10, log=False, sharex=False, sharey=False, figsize=(10,8)):
@@ -344,6 +350,7 @@ class TPSignalNoiseAnalyzer:
             ax.set_title(f"{i.left:.0f} < x < {i.right:.0f}")
 
         fig.suptitle(col)
+        fig.tight_layout()
         return fig
     
 
@@ -367,6 +374,7 @@ class TPSignalNoiseAnalyzer:
         ax.legend(l)
 
         fig.suptitle(f"{col} distribution by drift depth bins (collection)")
+        fig.tight_layout()
         return fig
     
 
@@ -442,6 +450,7 @@ class TPSignalNoiseAnalyzer:
 
         fig.suptitle(f"Incremental {var} cuts (collection)")
 
+        fig.tight_layout()
         return fig
     
 
@@ -526,4 +535,5 @@ class TPSignalNoiseAnalyzer:
         ax.set_xlabel('Threshold (ADC Peak)')
 
 
+        fig.tight_layout()
         return fig

@@ -24,24 +24,25 @@ class TriggerPrimitivesWorkspace:
 
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
     
-    def __init__(self, data_path: str):
+    def __init__(self, data_path: str, first_event: int=0, last_event: int = None):
         self._data_path = data_path
+        self._first_entry = first_event
+        self._last_entry = last_event
 
         self._log.info("Opening Trigger Primitives file")
         with uproot.open(self._data_path) as f:
 
-            self._log.info("Retrieving processing info")
+            self._log.info("Adding processing info")
             self.info = self._read_infos(f, 'triggerana/info')
 
             # FIXME: fail if the main tree is not there
-            self._log.info("Retrieving Trigger Primitives data")
+            self._log.info("Adding Trigger Primitives data")
             self.tree = f[self.tp_tree_name]
 
             # Try loading the 
-            self._log.info("Retrieving IDEs data")
+            self._log.info("Adding IDEs data")
             try:
                 self.ides_tree = f[self.ide_tree_name]
-                print(self.ides_tree)
             except uproot.KeyInFileError:
                 self._log.warning(f"Key '{self.ide_tree_name}' not found in file.")
                 self.ides_tree = None
@@ -86,11 +87,13 @@ class TriggerPrimitivesWorkspace:
         self.events = self._read_tree(self.tree, branch_names=['event'])
         self._log.info(f"{len(self.events)} events found")
         
-        self._log.info("Loading Trigger Primitives data")
-        self.tps = self._read_tree(self.tree, branch_names=['event']+self.TP_BRANCHES)
+        self._log.info(f"Loading Trigger Primitives data [{self._first_entry,self._last_entry}]")
+        self.tps = self._read_tree(self.tree, branch_names=['event']+self.TP_BRANCHES, entry_start=self._first_entry, entry_stop=self._last_entry)
 
         if not self.ides_tree is None:
-            self.ides = self._read_tree(self.ides_tree)
+            self._log.info(f"Loading IDEs data [{self._first_entry,self._last_entry}]")
+
+            self.ides = self._read_tree(self.ides_tree, entry_start=self._first_entry, entry_stop=self._last_entry)
 
             
     def _load_rawdigis_events( self ):
