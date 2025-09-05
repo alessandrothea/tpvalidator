@@ -521,18 +521,18 @@ class TPSignalNoiseAnalyzer:
         ax=axes[1][0]
         df.plot(x='threshold', y='noise_dominance', ax=ax)
         ax.axhline(1, color='r', lw=1)
-        ax.set_xlabel('Threshold (ADC Peak)')
+        ax.set_xlabel(f'Threshold ({var})')
 
         ax.set_ylabel('Counts(Noise)/Counts(Signal)')
         ax=axes[1][1]
         df.plot(x='threshold', y='purity', ax=ax)
         df.plot(x='threshold', y='completeness', ax=ax)
-        ax.set_xlabel('Threshold (ADC Peak)')
+        ax.set_xlabel(f'Threshold ({var})')
 
-        ax.axvline(37, color='r', lw=1)
+        # ax.axvline(37, color='r', lw=1)
         ax=axes[1][2]
         df.plot(x='threshold', y='rate_tot', ax=ax)
-        ax.set_xlabel('Threshold (ADC Peak)')
+        ax.set_xlabel(f'Threshold ({var})')
 
 
         fig.tight_layout()

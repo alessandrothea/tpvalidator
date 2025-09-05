@@ -8,6 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Data ang generated files
 data/*
 *.pdf
 tmp/
+reports/

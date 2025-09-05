@@ -221,7 +221,7 @@ class TriggerPrimitivesWorkspace:
         self._rawdigits_path = data_path
         with uproot.open(self._rawdigits_path) as f:
             # Import the 
-            self._log.info("Retrieving rawADC tree")
+            self._log.info("Loadding rawADC tree")
             self.rawdigits_tree = f[self.rawdigits_tree_name]
         
             # Read 
