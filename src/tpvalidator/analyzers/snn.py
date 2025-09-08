@@ -477,7 +477,7 @@ class TPSignalNoiseAnalyzer:
         axes[0][1].hist([df[df[f'TP_{var}'] > thres].TP_SADC for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_SADC)
         axes[0][1].set_title(self.sig_label)
         axes[0][2].hist([df[df[f'TP_{var}'] > thres].TP_TOT for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_TOT)
-        axes[0][1].set_title(self.sig_label)
+        axes[0][2].set_title(self.sig_label)
 
 
         for i,l in enumerate(['peakADC', 'SADC', 'TOT']):
@@ -507,6 +507,8 @@ class TPSignalNoiseAnalyzer:
         df = tps.sig_p2
         ax_trailer.hist([df[df[f'TP_{var}'] > thres].TP_trueX for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=100)
         ax_trailer.set_xlabel("drift coordinate")
+        ax_trailer.set_title(self.sig_label)
+        ax_trailer.legend([f"{var} > {t}" for t in thresholds])
 
         df = self.do_threshold_scan(2, var, thresholds)
         ax_table.axis('off')
