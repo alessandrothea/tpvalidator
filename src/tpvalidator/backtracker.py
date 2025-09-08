@@ -318,7 +318,7 @@ class BackTrackerPlotter:
 
 
         self.selected_tps = selected_tps
-        #fig.tight_layout()
+        fig.tight_layout()
         # return selected_tps
         return fig
     

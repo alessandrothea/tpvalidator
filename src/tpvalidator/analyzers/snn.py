@@ -137,7 +137,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     return fig
 
 class TPSignalNoisePreSelection:
-    def __init__(self, tps):
+    def __init__(self, tps, ):
 
         self.all = tps
 
@@ -164,8 +164,9 @@ class TPSignalNoisePreSelection:
 
 class TPSignalNoiseAnalyzer:
 
-    def __init__(self, tp_selection: TPSignalNoisePreSelection):
+    def __init__(self, tp_selection: TPSignalNoisePreSelection, sig_label='Signal'):
         self.tps = tp_selection
+        self.sig_label = sig_label
 
     def draw_tp_sig_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
         fig,axes= plt.subplots(3,3, figsize=figsize)
@@ -276,7 +277,7 @@ class TPSignalNoiseAnalyzer:
         ax.set_ylabel('counts')
         ax.legend(['Signal', 'Noise'])
 
-        fig.suptitle("Ar39 and Noise TPs distribution in peak time")
+        fig.suptitle(f"{self.sig_label} and Noise TPs distribution in peak time")
         fig.tight_layout()
         return fig
     
@@ -347,9 +348,9 @@ class TPSignalNoiseAnalyzer:
             # ax.set_xlabel(f"{var}")
             ax.set_title(var)
 
-            ax.legend(('Ar39+noise', 'Ar39', 'noise'))
+            ax.legend((f'{self.sig_label}+Noise', self.sig_label, 'noise'))
 
-        fig.suptitle(f"{', '.join(var_list)} distributions for : Ar39 vs electronics noise")
+        fig.suptitle(f"{', '.join(var_list)} distributions for : {self.sig_label} vs Noise")
         fig.tight_layout()
         return fig
     
@@ -472,8 +473,11 @@ class TPSignalNoiseAnalyzer:
         df = tps.sig_p2
 
         axes[0][0].hist([df[df[f'TP_{var}'] > thres].TP_peakADC for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_peakADC)
+        axes[0][0].set_title(self.sig_label)
         axes[0][1].hist([df[df[f'TP_{var}'] > thres].TP_SADC for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_SADC)
+        axes[0][1].set_title(self.sig_label)
         axes[0][2].hist([df[df[f'TP_{var}'] > thres].TP_TOT for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_TOT)
+        axes[0][1].set_title(self.sig_label)
 
 
         for i,l in enumerate(['peakADC', 'SADC', 'TOT']):
@@ -487,8 +491,11 @@ class TPSignalNoiseAnalyzer:
 
 
         axes[1][0].hist([df[df[f'TP_{var}'] > thres].TP_peakADC for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_peakADC)
+        axes[1][0].set_title('Noise')
         axes[1][1].hist([df[df[f'TP_{var}'] > thres].TP_SADC for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_SADC)
+        axes[1][1].set_title('Noise')
         axes[1][2].hist([df[df[f'TP_{var}'] > thres].TP_TOT for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_TOT)
+        axes[1][2].set_title('Noise')
 
         for i,l in enumerate(['peakADC', 'SADC', 'TOT']):
             axes[1][i].set_xlabel(l)
@@ -500,10 +507,6 @@ class TPSignalNoiseAnalyzer:
         df = tps.sig_p2
         ax_trailer.hist([df[df[f'TP_{var}'] > thres].TP_trueX for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=100)
         ax_trailer.set_xlabel("drift coordinate")
-
-        # for thres in thresholds:
-        #     ax = ax_trailer
-        #     df[df[f'TP_{var}'] >thres].TP_trueX.hist(ax=ax, bins=100) 
 
         df = self.do_threshold_scan(2, var, thresholds)
         ax_table.axis('off')
@@ -569,20 +572,20 @@ class TPSignalNoiseAnalyzer:
         ax=axes[0][0]
         df.plot(x='noise_frac', y='sig_frac', lw=0.5,  ax=ax)
         s = df.plot.scatter(x='noise_frac', y='sig_frac', c='threshold', cmap=cmap, ax=ax)
-        ax.set_ylabel('ar39 fraction')
+        ax.set_ylabel(f'{self.sig_label} fraction')
         ax.set_xlabel('Noise fraction')
 
 
         ax=axes[0][1]
         df.plot(x='n_noise', y='n_sig', lw=0.5,  ax=ax)
         df.plot.scatter(x='n_noise', y='n_sig', c='threshold',  cmap=cmap, ax=ax)
-        ax.set_ylabel('ar39 counts')
+        ax.set_ylabel(f'{self.sig_label} counts')
         ax.set_xlabel('Noise counts')
 
         ax=axes[0][2]
         df.plot(x='rate_noise', y='rate_sig', lw=0.5,  ax=ax)
         df.plot.scatter(x='rate_noise', y='rate_sig', c="threshold", cmap=cmap, ax=ax)
-        ax.set_ylabel('ar39 rate [Hz]')
+        ax.set_ylabel(f'{self.sig_label} rate [Hz]')
         ax.set_xlabel('Noise rate [Hz]')
         
         ax=axes[1][0]
