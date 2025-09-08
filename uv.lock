@@ -776,6 +776,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mistletoe"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/96/ea46a376a7c4cd56955ecdfff0ea68de43996a4e6d1aee4599729453bd11/mistletoe-1.4.0.tar.gz", hash = "sha256:1630f906e5e4bbe66fdeb4d29d277e2ea515d642bb18a9b49b136361a9818c9d", size = 107203, upload-time = "2024-07-14T10:17:35.212Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/0f/b5e545f0c7962be90366af3418989b12cf441d9da1e5d89d88f2f3e5cf8f/mistletoe-1.4.0-py3-none-any.whl", hash = "sha256:44a477803861de1237ba22e375c6b617690a31d2902b47279d1f8f7ed498a794", size = 51304, upload-time = "2024-07-14T10:17:33.243Z" },
+]
+
+[[package]]
 name = "mpl-axes-aligner"
 version = "1.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1362,6 +1371,7 @@ dependencies = [
     { name = "ipython" },
     { name = "ipywidgets" },
     { name = "matplotlib" },
+    { name = "mistletoe" },
     { name = "mpl-axes-aligner" },
     { name = "mplhep" },
     { name = "nbformat" },
@@ -1394,6 +1404,7 @@ requires-dist = [
     { name = "ipython", specifier = ">=9.2.0" },
     { name = "ipywidgets", specifier = ">=8.1.7" },
     { name = "matplotlib", specifier = ">=3.10.3" },
+    { name = "mistletoe", specifier = ">=1.4.0" },
     { name = "mpl-axes-aligner", specifier = ">=1.3" },
     { name = "mplhep", specifier = ">=0.4.0" },
     { name = "nbformat", specifier = ">=5.10.4" },

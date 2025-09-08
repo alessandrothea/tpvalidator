@@ -4,7 +4,9 @@ import json
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+import mistletoe as mt
 import uproot
+import textwrap
 import logging
 import tpvalidator.workspace as workspace
 import tpvalidator.utilities as utils
@@ -17,11 +19,66 @@ from tpvalidator.histograms import uproot_hist_mean_std
 from io import BytesIO
 
 
-from fpdf import FPDF, FontFace, Align
+from fpdf import FPDF, HTML2FPDF, FontFace, TextStyle, Align
 from pathlib import Path
+
+def debug_grid(pdf, step=10):
+    w, h = pdf.w, pdf.h
+    pdf.set_draw_color(220, 220, 220)
+    for gx in range(0, int(w), step):
+        pdf.line(gx, 0, gx, h)
+    for gy in range(0, int(h), step):
+        pdf.line(0, gy, w, gy)
+
+def label_cursor(pdf, text=None):
+    x, y = pdf.get_x(), pdf.get_y()
+    s = text or f"({x:.1f},{y:.1f})"
+    pdf.set_text_color(0, 0, 180)
+    pdf.set_font("Arial", size=8)
+    pdf.text(x + 2, y - 2, s)  # tiny label near the cross
+
+
+class MyHTML2FPDF(HTML2FPDF):
+    def __init__(
+        self,
+        pdf,
+        image_map=None,
+        li_tag_indent=None,
+        dd_tag_indent=None,
+        table_line_separators=False,
+        ul_bullet_char="disc",
+        li_prefix_color=(190, 0, 0),
+        heading_sizes=None,
+        pre_code_font=None,
+        warn_on_tags_not_matching=True,
+        tag_indents=None,
+        tag_styles=None,
+        font_family="times",
+        render_title_tag=False,
+    ):
+        
+        super().__init__(
+            pdf,
+            image_map=image_map,
+            li_tag_indent=li_tag_indent,
+            dd_tag_indent=dd_tag_indent,
+            table_line_separators=table_line_separators,
+            ul_bullet_char=ul_bullet_char,
+            li_prefix_color=li_prefix_color,
+            heading_sizes=heading_sizes,
+            pre_code_font=pre_code_font,
+            warn_on_tags_not_matching=warn_on_tags_not_matching,
+            tag_indents=tag_indents,
+            tag_styles=tag_styles,
+            font_family=font_family,
+            render_title_tag=render_title_tag,
+        )
 
 
 class MyPDF(FPDF):
+    HTML2FPDF_CLASS = MyHTML2FPDF
+
+
     # def header(self):
     #     # Rendering logo:
     #     self.image("../docs/fpdf2-logo.png", 10, 8, 33)
@@ -42,65 +99,133 @@ class MyPDF(FPDF):
         # Printing page number:
         self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
 
+    def write_markdown(self, text, *args, **kwargs):
+        text = textwrap.dedent(text)
+        # print(text)
+        self.write_html(mt.markdown(text), *args, **kwargs)
+
+    def move_cursor(self, dx=0, dy=0):
+        """Move the cursor in x and y
+
+        Args:
+            dx (int, optional): cursor displacement along x. Defaults to 0.
+            dy (int, optional): cursor displacement aling y. Defaults to 0.
+        """
+        self.set_xy(self.get_x() + dx, self.get_y() + dy)
+
+    def mark_cursor(self, size=3, text=None):
+        """Draw a crosshair centered at the current cursor posistion
+
+        Args:
+            size (int, optional): Crosshair size. Defaults to 3.
+        """
+        x, y = self.get_x(), self.get_y()
+        # small cross centered at (x, y)
+        self.set_draw_color(200, 0, 0)
+        self.line(x - size, y, x + size, y)      # horizontal
+        self.line(x, y - size, x, y + size)  
+        s = text or f"({x:.1f},{y:.1f})"
+        # self.set_text_color(0, 0, 180)
+        # self.set_font("Helvetica", size=8)
+        self.text(x + 2, y - 2, s)  # tiny label near the cross
+
+    def outline_next_cell(self, w, h):
+        x, y = self.get_x(), self.get_y()
+        self.set_draw_color(0, 100, 200)
+        self.rect(x, y, w, h)   # outline
+
+    def label_cursor(self, text=None):
+        x, y = self.get_x(), self.get_y()
+        s = text or f"({x:.1f},{y:.1f})"
+        # self.set_text_color(0, 0, 180)
+        # self.set_font("Helvetica", size=8)
+        self.text(x + 2, y - 2, s)  # tiny label near the cross
+        
+    def debug_grid(self, step=10):
+        w, h = self.w, self.h
+        self.set_draw_color(220, 220, 220)
+        for gx in range(0, int(w), step):
+            self.line(gx, 0, gx, h)
+        for gy in range(0, int(h), step):
+            self.line(0, gy, w, gy)
+
+    def draw_margins(self):
+        """Box showing the margin-bounded content area."""
+        x = self.l_margin
+        y = self.t_margin
+        w = self.w - self.l_margin - self.r_margin
+        h = self.h - self.t_margin - self.b_margin
+        self.set_draw_color(0, 120, 200)
+        self.set_line_width(0.3)
+        self.rect(x, y, w, h)
+
+
+    def image_with_caption(
+        self,
+        img_path: str,
+        *,
+        x: float = None,
+        y: float = None,
+        w: float = None,
+        h: float = None,
+        caption: str = "",
+        gap: float = 2.0,          # space between image and caption (in units)
+        line_h: float = 5.0,       # caption line height
+        center_on_page: bool = False,
+    ):
+        """
+        Draw an image and a caption centered under the image.
+        - Provide either w or h (or both); if only one is given, FPDF keeps aspect ratio.
+        - If center_on_page=True and w is given, image is horizontally centered in the content area.
+        """
+        # Decide X position
+        if x is None:
+            x = self.get_x()
+        if y is None:
+            y = self.get_y()
+
+        # If we want page-centering and a known width, compute X from margins
+        if center_on_page and w is not None:
+            content_w = self.w - self.l_margin - self.r_margin
+            x = self.l_margin + (content_w - w) / 2
+
+        # Draw image
+        self.image(img_path, x=x, y=y, w=w, h=h)
+
+        # Compute the final drawn image height (needed for caption Y).
+        # If h not provided but w is, we can approximate via intrinsic size if available,
+        # otherwise rely on FPDF to preserve aspect ratio and just place caption after a gap.
+        # Easiest robust approach: ask current Y after placing image:
+        # (FPDF doesn't move the cursor for image(), so we compute using our inputs.)
+        img_h = h
+        if img_h is None and w is not None:
+            # If you need exact height from the file’s aspect ratio, set h yourself,
+            # or use PIL to read size. Here we’ll just place caption immediately after y + (h or 0).
+            pass
+
+        # Caption Y position
+        cap_y = (y + (img_h or 0)) + gap
+
+        # Draw caption within the image width, centered
+        # (If you didn’t set w, choose a reasonable width for the caption.)
+        cap_w = w if w is not None else (self.w - self.l_margin - self.r_margin)
+
+        # Save original X to keep layout predictable after multi_cell
+        old_x = self.get_x()
+        self.set_xy(x, cap_y)
+        self.multi_cell(cap_w, line_h, caption, align="C")
+        # After multi_cell, X resets to left margin; restore a sensible X just below caption:
+        self.set_x(old_x)
+
+        # Return bottom Y so caller can continue below
+        return self.get_y()
+
 
 FORMAT = "%(message)s"
 logging.basicConfig(
     level="WARN", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
 )
 
-#
-# EXPERIMENTAL
-#
-# class MyLittleReport:
-#     pass
-#     log = logging.getLogger('PlotMaker')
-
-
-# class FigurePage:
-
-#     def __init__(self, name, fmt='svg'):
-#         self.name = name
-#         self.fmt = fmt
-#         self.fig = None
-
-#     @property
-#     def log(self):
-#         return self._maker.log
-
-#     def make_plot(self, maker: PlotMaker) -> plt.Figure:
-#         # 2 Ar39 point of origin on the xy, xz and yz planes
-#         fig = maker.alltp_ana.draw_tp_origin_2d_dist()
-#             self.fig = fig
-
-#     def save_fig(self, output_dir: str) -> str:
-#         if self.fig is None:
-#             return
-        
-#         self.log.info(f'Generating {self.name}')
-#         img_path = output_dir / (self.name + self.fmt)
-#         self.fig.save_fig(img_path)
-#         return img_path
-
-#     def make_page(self, pdf):
-#         pdf.write_html("<h1>Noise and AR39 signal distribution</h1>")
-
-#         pdf.image('./tmp/ar39_adc_dist.svg', w=pdf.epw)
-#         # with pdf.text_columns() as cols:
-
-#         pdf.write_html("""
-#             ADC samples distributions per plane (integrated on all events)
-#             <ul>
-#                     <li> Blue: ADC distribution on channels where IDE are present
-#                     <li> Orange: ADC distribution on channels where IDE are absent
-#             </ul>
-#         """
-#         )
-
-
-
-#
-# Experimental
-#
 
 class Portfolio:
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
@@ -137,11 +262,14 @@ class Portfolio:
         # TODO: decouple?
         self._log.info(f"Saving {img_name} as {img_path}")
         fig.savefig(img_path)
+        plt.close(fig)
 
         return img_path
     
 
 class LazyFigure:
+    """Wrapper 
+    """
 
     def __init__(self, analyzer_name, analyzer_method, *args, **kwargs):
         self.ana_name = analyzer_name
@@ -156,11 +284,11 @@ class LazyFigure:
         fig = method(*self.args, **self.kwargs)
 
 
-def save_fig(fig, img_name, fmt='svg', out_dir=Path('./tmp')):
-    logging.info(f'Generating {img_name}')
-    img_path = out_dir / (f'{img_name}.{fmt}')
-    fig.savefig(img_path)
-    return {img_name: img_path}
+# def save_fig(fig, img_name, fmt='svg', out_dir=Path('./tmp')):
+#     logging.info(f'Generating {img_name}')
+#     img_path = out_dir / (f'{img_name}.{fmt}')
+#     fig.savefig(img_path)
+#     return {img_name: img_path}
 
 
 
@@ -184,13 +312,24 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
 
 
     # 2 Ar39 point of origin on the xy, xz and yz planes
-    pf.add_figure('ar39_xyz_pos_dist_all_tps', alltp_ana.draw_tp_origin_2d_dist, fmt='png')
+    pf.add_figure('ar39_xyz_pos_dist_all_tps', alltp_ana.draw_tp_sig_origin_2d_dist, fmt='png')
 
     # 3 Ar39 point of origin on the xy, xz and yz planes
-    pf.add_figure('ar39_x_pos_dist_all_tps', alltp_ana.draw_tp_drift_depth_dist)
+    pf.add_figure('ar39_x_pos_dist_all_tps', alltp_ana.draw_tp_sig_drift_depth_dist)
+    pf.add_figure('ar39_x_pos_weighted_dist_all_tps', functools.partial(alltp_ana.draw_tp_sig_drift_depth_dist, weight_by="SADC"))
 
     # Distribution of signat tps time in the drift direction
     pf.add_figure('ar39_start_time_dist_all_tps', alltp_ana.draw_tp_start_time_dist)
+
+
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 26'))
+    pf.add_figure('ar39_event_10_peak26_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 36'))
+    pf.add_figure('ar39_event_10_peak36_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 46'))
+    pf.add_figure('ar39_event_10_peak46_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 56'))
+    pf.add_figure('ar39_event_10_peak56_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
 
     # Plot ides time distribution
     def plot_ides_time():
@@ -220,11 +359,11 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
 
     # Draw the impact of cuts on TP distributions
     cuts = [t for t in range(26, 50, 5)]
-    pf.add_figure('ar39_dists_with_peakadc_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'peakADC', cuts, log=True, figsize=(10, 10)))
+    pf.add_figure('ar39_dists_with_peakadc_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'peakADC', cuts, log=True, figsize=(15, 10)))
     cuts = [t for t in range(0,10,2)]
-    pf.add_figure('ar39_dists_with_tot_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'TOT', cuts, log=True, figsize=(10, 10)))
+    pf.add_figure('ar39_dists_with_tot_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'TOT', cuts, log=True, figsize=(15, 10)))
     cuts = [t for t in range(0, 500, 100)]
-    pf.add_figure('ar39_dists_with_sadcs_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'SADC', cuts, log=True, figsize=(10, 10)))
+    pf.add_figure('ar39_dists_with_sadcs_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'SADC', cuts, log=True, figsize=(15, 10)))
 
 
     # Draw the impact of cuts on TP distributions
@@ -285,106 +424,188 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         pdf.add_font('Raleway', '', '/Users/ale/Library/Fonts/Raleway-Regular.ttf')
         pdf.add_font('Raleway', 'B', '/Users/ale/Library/Fonts/Raleway-Bold.ttf')
-        pdf.set_font("Raleway", size=16)
+        pdf.add_font('OpenSans', '', '/Library/Fonts/OpenSans_Regular.ttf')
+        pdf.add_font('OpenSans', 'B', '/Library/Fonts/OpenSans_Bold.ttf')
+        pdf.add_font('Roboto', '', '/Library/Fonts/Roboto_Regular.ttf')
+        pdf.add_font('Roboto', 'B', '/Library/Fonts/Roboto_Regular.ttf')
+
+        pdf.set_font("OpenSans", size=15)
+
+        color_blue = "#093fb5ff"
+        color_orange = "#f06000"
 
         tag_styles={
-            "h1": FontFace(color="#093fb5ff", size_pt=28),
-            "h2": FontFace(color="#f06000", size_pt=24),
+            "h1": FontFace(color=color_blue, size_pt=28, family='Raleway'),
+            "h2": FontFace(color=color_orange, size_pt=24, family='Raleway'),
+
         }
 
         with open(figures_dir / 'notes.json', 'r') as fp:
             notes = json.load(fp)
 
 
-        # This requires access to the WS
+
+        # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>A first look at Ar39 in VD simulation</h1>", tag_styles=tag_styles)
-        pdf.write_html(f"""<h2>Data sample details</h2>
-        <ul>
-            <li>TP data file: <b>{notes['tp_file_path']}</b></li>
-            <li>Waveforms data: <b>{notes['wf_file_path']}</b></li>
-            <li>Detector geometry: <b>{notes['ws_info']['geo']['detector']}</b></li>
-            <li>MC generator(s): <b>{', '.join(notes['ws_info']['mc_generator_labels'])}</b></li>
-            <li>TPG settings:
-            <ul>
-                <li> Algorithm: <b>{notes['ws_info']['tpg']['tool']}</b>
-                <li> Threshold U: <b>{notes['ws_info']['tpg']['threshold_tpg_plane0']}</b>
-                <li> Threshold V: <b>{notes['ws_info']['tpg']['threshold_tpg_plane1']}</b>
-                <li> Threshold X/Z: <b>{notes['ws_info']['tpg']['threshold_tpg_plane2']}</b>
-            </ul>
-            <li>Event: <b>{notes['event_begin']}-{notes['event_end']}</b>
-            </li>
-        </ul>""", tag_styles=tag_styles)
+        pdf.write_markdown("# **A first look at Ar39 in VD simulation**", tag_styles=tag_styles)
+        pdf.write_markdown(f"""
+                            ## Data sample details
 
+                            * TP data file: **{notes['tp_file_path']}**
+                            * Waveforms data: **{notes['wf_file_path']}**
+                            * Detector geometry: **{notes['ws_info']['geo']['detector']}**
+                            * MC generator(s): **{', '.join(notes['ws_info']['mc_generator_labels'])}**
+                                * Algorithm: **{notes['ws_info']['tpg']['tool']}**
+                                * Threshold U: **{notes['ws_info']['tpg']['threshold_tpg_plane0']}**
+                                * Threshold V: **{notes['ws_info']['tpg']['threshold_tpg_plane1']}**
+                                * Threshold X/Z: **{notes['ws_info']['tpg']['threshold_tpg_plane2']}**
+                            * Event: **{notes['event_begin']}-{notes['event_end']}**
+                            """, tag_styles=tag_styles, li_prefix_color=color_orange)
+        
+        # ---------------------------------------------------------------------
+        # TODO: add TOC
+        # pdf.add_page()
+        # pdf.write_markdown("# **Table of content**", tag_styles=tag_styles)
+        # pdf.write_html("<toc>")
 
-        # pdf.output(report_dir / "ar39_report.pdf")
-        # return
         # Page 2
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Noise and AR39 signal distribution</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Noise and AR39 signal distribution**", tag_styles=tag_styles, li_prefix_color=color_orange)
 
         pdf.image( figures_dir / 'ar39_adc_dist.svg', w=pdf.epw)
         # with pdf.text_columns() as cols:
 
-        pdf.write_html("""
-            ADC samples distributions per plane (integrated on all events)
-            <ul>
-                    <li> Blue: ADC distribution on channels where IDE are present
-                    <li> Orange: ADC distribution on channels where IDE are absent
-            </ul>
-        """, tag_styles=tag_styles)
+        pdf.write_markdown(r"""
+                    ADC samples distributions per plane (integrated on the full dataset)
+                           
+                    * Blue: ADC distribution of channels where IDE are present
+                    * Orange: ADC distribution of channels where IDE are absent
+                           
+                    The 3σ and 5σ lines calculated on noise-only waveforms (no IDEs)
+        """, tag_styles=tag_styles, li_prefix_color=color_orange)
 
         # Page 3
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Ar39 TPs origin</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Ar39 TPs origin**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_xyz_pos_dist_all_tps.png', h=pdf.eph*0.9, x=Align.L)
 
         pdf.set_xy(pdf.eph+30, 30)
-        pdf.write_html("""
+        pdf.write_markdown("""
             Point of origin of TPs (trueX) tagged as signal, i.e. matching an IDE
         """, tag_styles=tag_styles)
 
+
+        # Page 3
+        # ---------------------------------------------------------------------
+        pdf.add_page()
+        pdf.write_markdown("# **Example event: signal and noise TPs**", tag_styles=tag_styles)
+        # pdf.write_markdown("**Event 10**", tag_styles=tag_styles)
+        
+        # pdf.debug_grid()
+        # pdf.draw_margins()
+
+        # pdf.mark_cursor(text="A")
+        pdf.move_cursor(dy=5)
+        img_w = pdf.epw//2
+        with pdf.local_context(font_size_pt = 10):
+            pdf.cell(w=img_w, text="a) peakADC>26", markdown=True, align=Align.C)
+            pdf.cell(w=img_w, text="b) peakADC>36", markdown=True, align=Align.C)
+
+        # pdf.mark_cursor(text="C")
+        pdf.ln()
+        # pdf.mark_cursor(text="D")
+
+
+        x0, y0 = pdf.get_x(), pdf.get_y()
+        ii = pdf.image( figures_dir / 'ar39_event_10_peak26_all_tps.png', w=img_w, x=Align.L,)
+        # pdf.mark_cursor(text="I1")
+
+        pdf.set_xy(x0+img_w, y0)
+        # pdf.move_cursor(dx=img_w)
+
+        # pdf.mark_cursor(text="I2")
+
+        ii = pdf.image( figures_dir / 'ar39_event_10_peak36_all_tps.png', w=img_w)
+        # pdf.mark_cursor(text="I3")
+
+        pdf.set_xy(x0, y0+ii.rendered_height)
+        x0, y0 = pdf.get_x(), pdf.get_y()
+
+        ii = pdf.image( figures_dir / 'ar39_event_10_peak46_all_tps.png', w=img_w)
+        # pdf.mark_cursor(text="I4")
+        pdf.set_xy(x0+img_w, y0)
+        ii = pdf.image( figures_dir / 'ar39_event_10_peak56_all_tps.png', w=img_w)
+        pdf.set_xy(x0, y0+ii.rendered_height)
+
+        with pdf.local_context(font_size_pt = 10):
+
+            pdf.cell(w=img_w, text="c) peakADC>46", markdown=True, align=Align.C)
+            pdf.cell(w=img_w, text="d) peakADC>56", markdown=True, align=Align.C)
+
+        pdf.ln()
+        # pdf.mark_cursor(text="I5")
+
+        pdf.write_markdown(f"""
+                    * Channel and peakT of TPs in event 10
+                    * Incremental peakADC cuts are applied (from a) to d)) to show the distribution of TPs at higher peakADC.
+                    * NOTE: A lack of signal TPs is evident at peakT > 8200 for all planes. In this region noise TPs have a harder spectrum:
+                      A fraction survives the prakADC cut appearing very similar to signal TPs, suggesting that they may be untagged signal TPs.
+                    """, tag_styles=tag_styles, li_prefix_color=color_orange)
+
+
+
+
         # ---------------------------------------------------------------------
         pdf.add_page()
 
-        pdf.write_html("<h1>Ar39 TPs depth origin in the drift</h1>", tag_styles=tag_styles)
-        pdf.image( figures_dir / 'ar39_x_pos_dist_all_tps.svg', w=pdf.epw*0.9, x=Align.C)
-        pdf.write_html("Distribution of trueX for TPs tagged as signal in the 3 planes", tag_styles=tag_styles)
+        pdf.write_markdown("# **TP point of origin vs drift depth for signal TPs**", tag_styles=tag_styles)
 
+        pdf.image( figures_dir / 'ar39_x_pos_dist_all_tps.svg', w=pdf.epw, x=Align.C)
+        pdf.write_markdown(
+            """Point of origin in the drift for TPs tagged as signal, i.e. matched to at least 1 IDE object.
+                All 3 distributions have a maximum in the x=(100,200) range, 1 meter from the anode.
+            """, tag_styles=tag_styles)
+        
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Timing of TPs tagged as signal and noise</h1>", tag_styles=tag_styles)
-        pdf.image( figures_dir / 'ar39_start_time_dist_all_tps.svg', w=pdf.epw*0.8, x=Align.L)
-        pdf.image( figures_dir / 'ar39_ides_time_dist_all_tps.svg', h=pdf.eph*0.4, x=Align.L)
-        pdf.set_xy(pdf.epw//3+30, 2*pdf.eph//3+30)
-        pdf.write_html("""
-                    <ul>
-                    <li> top 3 figures: Distribution of TP time by plane
-                    <li> bottom figure: Distribution of IDEs time of arrival at the anode (CRP)
-                    </ul>
+        pdf.write_markdown("# **Ar39  - total SADC sum vs drift depth for signal TPs**", tag_styles=tag_styles)
+
+        pdf.image( figures_dir / 'ar39_x_pos_weighted_dist_all_tps.svg', w=pdf.epw, x=Align.C)
+
+
+    
+        # ---------------------------------------------------------------------
+        pdf.add_page()
+        pdf.write_markdown("# **Timing of TPs tagged as signal and noise**", tag_styles=tag_styles)
+        ii = pdf.image( figures_dir / 'ar39_start_time_dist_all_tps.svg', w=pdf.epw*0.9, x=Align.L)
+        ii = pdf.image( figures_dir / 'ar39_ides_time_dist_all_tps.svg', h=pdf.eph*0.3, x=Align.L)
+        pdf.move_cursor(dx=ii.rendered_width, dy=-ii.rendered_height+10)
+        # pdf.set_xy(pdf.epw//3+30, 2*pdf.eph//3+30)
+        pdf.write_markdown("""
+                    * Top figures: Distribution of TP time by plane
+                    * Bottom figure: Distribution of IDEs time of arrival at the anode (CRP)
+                    * NOTE: The IDEs time distribution shows 2 issues:
+                        1. A spike at `time=62k`, well beyond the readout window end,
+                        2. No IDEs beyond `time=8200`.
         """, tag_styles=tag_styles)
 
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Timing of TPs tagged as signal and noise (clean)</h1>", tag_styles=tag_styles)
-        pdf.image( figures_dir / 'ar39_start_time_dist.svg', w=pdf.epw*0.8, x=Align.L)
-        pdf.write_html("""
-                    <ul>
-                    <li> Distribution of TP startTime after applying cleanup
-                    <li> startT > 100 && startT < 8200
-                    </ul>
-
+        pdf.write_markdown("# **Timing of TPs tagged as signal and noise (clean)**", tag_styles=tag_styles)
+        pdf.image( figures_dir / 'ar39_start_time_dist.svg', w=pdf.epw*0.9, x=Align.L)
+        pdf.write_markdown("""
+                    * Distribution of TP startTime after applying cleanup
+                    * startT > 100 && startT < 8200
         """, tag_styles=tag_styles)
-
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Basic TP distribution</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Basic TP distribution**", tag_styles=tag_styles)
         pdf.image( figures_dir / 'ar39_vs_elnoise_var_dist.svg', w=pdf.epw, x=Align.C)
         # pdf.write_html("""
         #                <ul>
@@ -396,24 +617,24 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Distribution of TP peakADC across the drift</h1>(Bins of trueX)", tag_styles=tag_styles)
+        pdf.write_markdown("# **Distribution of TP peakADC across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
         pdf.image( figures_dir / 'ar39_peakadc_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Distribution of TP TOT across the drift</h1>(Bins of trueX)", tag_styles=tag_styles)
+        pdf.write_markdown("# **Distribution of TP TOT across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
         pdf.image( figures_dir / 'ar39_tot_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Distribution of TP SADC across the drift</h1>(Bins of trueX)", tag_styles=tag_styles)
+        pdf.write_markdown("# **Distribution of TP SADC across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
         pdf.image( figures_dir / 'ar39_sadc_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Stacked TP distributions</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Stacked TP distributions**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
 
         pdf.set_y(pdf.eph//3)
         x = pdf.get_x()
@@ -423,10 +644,12 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
         pdf.image( figures_dir / 'ar39_tot_dist_stack_in_drift_bins.svg', w=pdf.epw//3, x=x+pdf.epw//3)
         pdf.set_y(y)
         pdf.image( figures_dir / 'ar39_sadc_dist_stack_in_drift_bins.svg', w=pdf.epw//3, x=x+2*pdf.epw//3)
-
+        pdf.write_markdown("""
+                    Comparison of peakADC, TOT and SADC for in 4 regions of trueX for the collection plane.
+        """, tag_styles=tag_styles)
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Effects of peakADC cuts on distributions</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Effects of peakADC cuts on distributions**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_dists_with_peakadc_cuts.svg', h=pdf.eph*0.9, x=Align.L)
 
@@ -437,7 +660,7 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Effects of TOT cuts on distributions</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Effects of TOT cuts on distributions**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_dists_with_tot_cuts.svg', h=pdf.eph*0.9, x=Align.L)
 
@@ -449,7 +672,7 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Effects of SADCs cuts on distributions</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **Effects of SADCs cuts on distributions**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_dists_with_sadcs_cuts.svg', h=pdf.eph*0.9, x=Align.L)
 
@@ -460,7 +683,7 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Ar39 TPs origin</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **PeakADC cuts noise rejection efficiency**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_peak_thresh_scan_perf.svg', w=pdf.epw*0.95, x=Align.C)
 
@@ -468,7 +691,7 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
         # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Ar39 TPs origin</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **TOT cuts noise rejection efficiency**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_tot_thresh_scan_perf.svg', w=pdf.epw*0.95, x=Align.C)
 
@@ -476,7 +699,7 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, interactive: b
 
             # ---------------------------------------------------------------------
         pdf.add_page()
-        pdf.write_html("<h1>Ar39 TPs origin</h1>", tag_styles=tag_styles)
+        pdf.write_markdown("# **SADC cuts noise rejection efficiency**", tag_styles=tag_styles)
 
         pdf.image( figures_dir / 'ar39_sadc_thresh_scan_perf.svg', w=pdf.epw*0.95, x=Align.C)
 

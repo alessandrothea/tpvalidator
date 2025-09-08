@@ -14,10 +14,31 @@ from contextlib import contextmanager
 #
 @contextmanager
 def temporary_log_level(logger, level):
+    """Change the logger message lever within the context.
+    Restore the previous leve at context exit.
+    """
     old_level = logger.level
     logger.setLevel(level)
     yield
     logger.setLevel(old_level)
+
+
+@contextmanager
+def pandas_backend(backend):
+    """Change the pandas graphical backend within the context.
+    Restore the previous backend at context exit.
+
+    Args:
+        backend (_type_): _description_
+    """
+    import pandas as pd
+
+    current_backend = pd.options.plotting.backend
+    print('xxx')
+    pd.options.plotting.backend = backend
+    yield
+    print('yyy')
+    pd.options.plotting.backend = current_backend
 
 
 

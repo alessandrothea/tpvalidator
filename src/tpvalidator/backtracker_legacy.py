@@ -1,39 +1,34 @@
+from rich import print
 import matplotlib
-import pandas as pd
-from .workspace import TriggerPrimitivesWorkspace
+from .basic import BasicTPData
 from .utilities import subplot_autogrid
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import Tuple, Optional, Union, Sequence, Dict, List
 
-from rich import print
 
 
 class BackTrackerPlotter:
 
-    def __init__(self, tpws: TriggerPrimitivesWorkspace, ev_num: int):
+    def __init__(self, tp_data: BasicTPData, ev_num: int):
 
-        if tpws.ides is None:
-            raise RuntimeError(f"No IDE data available in '{tpws._tp_path}'")
+        if tp_data.ides is None:
+            raise RuntimeError(f"No IDE data available in '{tp_data.data_path}'")
 
         self.ev_num = ev_num
-        self.ws = tpws
+        self.data = tp_data
 
+        self.inspect_tps = self.data.tps[(self.data.tps.event == ev_num)  & (self.data.tps.TP_signal == True)]
 
-        self.inspect_tps = self.ws.tps[(self.ws.tps.event == ev_num)  & (self.ws.tps.TP_signal == True)]
-
-        self.offsets = [self.ws.tp_backtracker_offset(p) for p in range(3)]
-        self.tp_thresholds = [self.ws.tp_threshold(p) for p in range(3)]
-
-
-        self.waveforms = self.ws.waveforms.get(ev_num, None)
+        self.offsets = [self.data.tp_backtracker_offset(p) for p in range(3)]
+        self.tp_thresholds = [self.data.tp_threshold(p) for p in range(3)]
+        self.waveforms = self.data.waveforms.get(ev_num, None)
         if self.waveforms is None:
-            print(f"[yellow]Warning: no waveform data found in {self.ws._rawdigits_path} for event {ev_num}[/yellow]")
+            print(f"[yellow]Warning: no waveform data found in {self.data.data_path} for event {ev_num}[/yellow]")
 
 
-    def old_plot_tps_vs_ides( self, tp_ids: list, layout:str = 'grid', figsize=(10, 10)):
+    def plot_tps_vs_ides( self, tp_ids: list, layout:str = 'grid', figsize=(10, 10)):
 
-        # tp_data = self.ws
+        # tp_data = self.data
         inspect_tps = self.inspect_tps
         waves = self.waveforms
         
@@ -61,10 +56,6 @@ class BackTrackerPlotter:
 
         selected_tps = inspect_tps.iloc[:0].copy()
 
-        # Focus on ides from this event only 
-        event_ides = self.ws.ides[self.ws.ides.event == self.ev_num]
-
-
         for i,tp_idx in enumerate(tp_ids):
 
             ax = axes[i]
@@ -76,26 +67,17 @@ class BackTrackerPlotter:
             ch_id = int(tp.TP_channel)
 
             tp_start, tp_end = int(tp.TP_startT), int(tp.TP_startT+tp.TP_TOT)
-            ide_win_extension = 500
-
             # print(f"TP start-end: {tp_start}-{tp_end}")
             # print(f"TP peak: {tp.TP_peakADC}")
-            # print(f"TP channel: {tp.TP_channel}")
 
             # Plot IDE data
-            q_ch = event_ides[
-                (event_ides.channel == ch_id) & 
-                (event_ides.time > (tp_start-ide_win_extension)) &
-                (event_ides.time < (tp_end+ide_win_extension))
-                ]
-            
-            lns = ax.plot(q_ch.time, q_ch.n_electrons, label='n$_{el}$', color=ide_color)
-            ax.fill_between(q_ch.time, 0, q_ch.n_electrons, color=ide_color_fill)
+            q_ch = self.data.ides[(self.data.ides['event'] == self.ev_num) & (self.data.ides.channel == ch_id)]
+            lns = ax.plot(q_ch.time, q_ch.nElectrons, label='n$_{el}$', color=ide_color)
+            ax.fill_between(q_ch.time, 0, q_ch.nElectrons, color=ide_color_fill)
             ax.axhline(y=0, color='black', linewidth=1)
 
             xmin, xmax = ax.get_xlim()
-            ax.set_xlim(min(xmin, tp_start)-tp.TP_TOT, max(xmax, tp_end)+tp.TP_TOT)
-            xmin, xmax = ax.get_xlim()
+            ax.set_xlim(min(xmin, tp_start), max(xmax, tp_end))
 
             ax.set_xlabel("sample")
             ax.set_ylabel("n electrons$")
@@ -104,7 +86,6 @@ class BackTrackerPlotter:
             else:
                 from mpl_axes_aligner import shift
                 shift.yaxis(ax, 0, 0.6, True)
-
 
                 ## FIXME: using the position as sample_id
                 wf = waves.reset_index()[ch_id]
@@ -127,158 +108,9 @@ class BackTrackerPlotter:
                 ax_2.axhline(y=wf_mean, color='black', linewidth=1)
                 ax_2.axhline(y=wf_mean+tp_thresholds[tp_plane], color=thres_color, linewidth=1)
 
-                shift.yaxis(ax_2, wf_mean, 0.2, True)
-                ax_2.set_ylabel("adcs")
-
-
-            # Fixme use the sample id
-            # if ((waves.event == ev_num).any()):
-
-            #     from mpl_axes_aligner import shift
-            #     shift.yaxis(ax, 0, 0.6, True)
-            #     wf = waves[['sample_id', ch_id]]
-    
-            #     xmin, xmax = ax.get_xlim()
-            #     ax_2 = ax.twinx()
-
-            #     # wf_zoom = wf.iloc[int(xmin):int(xmax)]
-            #     wf_zoom = wf[(wf.sample_id >=  int(xmin)) | (wf.sample_id <= int(xmax))]
-            #     lns += ax_2.plot(wf_zoom.sample_id, wf_zoom.values, label="adcs", color=wave_color)
-
-            #     ch_mean  = wf[ch_id].mean()
-            #     ax_2.axhline(y=ch_mean, color='black', linewidth=1)
-            #     ax_2.axhline(y=ch_mean+thres[p], color=thres_color, linewidth=1)
-
-            #     shift.yaxis(ax_2, ch_mean, 0.2, True)
-
-            ymin, ymax = ax.get_ylim()
-
-            rect_tp = patches.Rectangle((tp.TP_startT, ymin), tp.TP_TOT, ymax-ymin,
-                                    linewidth=2, edgecolor=tp_color, facecolor=tp_color, alpha=0.2)
-            ax.add_patch(rect_tp)
-            rect_match = patches.Rectangle((tp.TP_startT+offsets[tp_plane], ymin), tp.TP_TOT, ymax-ymin,
-                                    linewidth=2, edgecolor=match_color, fill=False, linestyle='-.', alpha=0.5)
-            ax.add_patch(rect_match)
-
-            ax.legend(lns+[rect_tp, rect_match], [l.get_label() for l in lns]+['TP', 'match win'], loc=0)
-
-            ax.set_title(f"ch {int(tp.TP_channel)}, plane {int(tp.TP_plane)} ")
-        
-        fig.suptitle(f"Event {self.ev_num}", fontsize=16)
-
-
-        self.selected_tps = selected_tps
-        #fig.tight_layout()
-        # return selected_tps
-        return fig
-    
-    def plot_tps_vs_ides( self, tps: Union[List[int],pd.DataFrame], layout:str = 'grid', figsize=(10, 10)):
-
-        ## Some parameters
-        ide_win_extension = 500
-
-        # tp_data = self.ws
-        inspect_tps = self.inspect_tps
-        waves = self.waveforms
-        
-        offsets = self.offsets
-        tp_thresholds = self.tp_thresholds
-
-        match layout:
-            case 'lin':
-                fig, axes = plt.subplots(1,len(tps), figsize=figsize)
-            case 'grid':
-                fig, axes = subplot_autogrid(len(tps), figsize=figsize)
-            case _:
-                raise ValueError(f"Layout value '{layout} unknown" )
-
-        # Color selection
-        colors = matplotlib.colormaps['tab20'].colors
-        ide_color = colors[0]
-        ide_color_fill = colors[1]
-        wave_color = colors[2]
-        thres_color = colors[6]
-        thres_fill_color = colors[7]
-        tp_color = colors[7]
-        match_color = colors[8]
-
-        import pandas as pd
-        # Make a small local copy
-        if isinstance(tps, list):
-            selected_tps = inspect_tps.iloc[tps].copy()
-        elif isinstance(tps, pd.DataFrame):
-            selected_tps = tps.copy()
-        else:
-            raise TypeError(f"Argument 'tps' of unsupported type {type(tps)}" )
-
-
-        # Focus on ides from this event only 
-        event_ides = self.ws.ides[self.ws.ides.event == self.ev_num]
-
-
-        for i, (index, tp) in enumerate(selected_tps.iterrows()):
-
-            ax = axes[i]
-
-            # tp = inspect_tps.iloc[tp_idx]
-            tp_plane = int(tp.TP_plane)
-            selected_tps.loc[len(selected_tps)] = tp
-
-            ch_id = int(tp.TP_channel)
-
-            tp_start, tp_end = int(tp.TP_startT), int(tp.TP_startT+tp.TP_TOT)
-
-            # print(f"TP start-end: {tp_start}-{tp_end}")
-            # print(f"TP peak: {tp.TP_peakADC}")
-            # print(f"TP channel: {tp.TP_channel}")
-
-            # Plot IDE data
-            q_ch = event_ides[
-                (event_ides.channel == ch_id) & 
-                (event_ides.time > (tp_start-ide_win_extension)) &
-                (event_ides.time < (tp_end+ide_win_extension))
-                ]
-            
-            lns = ax.plot(q_ch.time, q_ch.n_electrons, label='n$_{el}$', color=ide_color)
-            ax.fill_between(q_ch.time, 0, q_ch.n_electrons, color=ide_color_fill)
-            ax.axhline(y=0, color='black', linewidth=1)
-
-            xmin, xmax = ax.get_xlim()
-            ax.set_xlim(min(xmin, tp_start)-tp.TP_TOT, max(xmax, tp_end)+tp.TP_TOT)
-            xmin, xmax = ax.get_xlim()
-
-            ax.set_xlabel("sample")
-            ax.set_ylabel("n electrons$")
-            if waves is None:
-                print(f"[yellow]No waveforms found for event '{self.ev_num}[/yellow]'")
-            else:
-                from mpl_axes_aligner import shift
-                shift.yaxis(ax, 0, 0.6, True)
-
-
-                ## FIXME: using the position as sample_id
-                wf = waves.reset_index()[ch_id]
-                wf_mean = wf.mean()
-
-                xmin, xmax = ax.get_xlim()
-                ax_2 = ax.twinx()
-
-                wf_zoom = wf.iloc[int(xmin):int(xmax)]
-                lns += ax_2.plot(wf_zoom.index, wf_zoom.values, label="adcs", color=wave_color)
-                wf_mean_2 = (wf[0:32].mean()+wf[-32:-1].mean())/2
-                wf_mean_2 = wf_zoom[0:10].mean()
-                wf_mean_2 = wf_mean
-                # lns += ax_2.plot(wf_zoom.index, (((wf_zoom-wf_mean_2).cumsum()/6)+wf_mean_2).values, label="adcs", color="green")
-
-
-                tp_thres = wf_mean+tp_thresholds[tp_plane];
-                ax_2.fill_between(wf_zoom.index, wf_zoom.where(wf_zoom < tp_thres, tp_thres).values, wf_zoom.values, color=thres_fill_color, alpha=0.3)
-
-                ax_2.axhline(y=wf_mean, color='black', linewidth=1)
-                ax_2.axhline(y=wf_mean+tp_thresholds[tp_plane], color=thres_color, linewidth=1)
 
                 shift.yaxis(ax_2, wf_mean, 0.2, True)
-                ax_2.set_ylabel("adcs")
+                ax_2.set_ylabel("adc$")
 
 
             # Fixme use the sample id
@@ -339,11 +171,19 @@ class BackTrackerPlotter:
         return self.plot_tps_vs_ides(tp_pos_list, layout='lin', figsize=figsize)
     
 
-    def plot_tps_vs_ides_by_plane(self, plane_id: int, tp_idx_in_plane: list, figsize=(10, 10)):
+    def plot_tps_vs_ides_by_plane(self, plane_id: int, tp_pos: list, figsize=(10, 10)):
+        # FIXME : sort out tp position vs index
+        inspect_tps = self.inspect_tps
 
-        selected_tps = self.inspect_tps[self.inspect_tps.TP_plane == plane_id].iloc[[tp_idx_in_plane]]
+        inspect_tps_plane = inspect_tps[inspect_tps.TP_plane == plane_id]
 
-        return self.plot_tps_vs_ides(selected_tps, figsize=figsize)
+        tp_pos_list = []
+
+        for tp_pos in tp_pos:
+            tp_idx = inspect_tps_plane.index[tp_pos]
+            tp_pos_list.append(inspect_tps.index.get_loc(tp_idx))
+
+        return self.plot_tps_vs_ides(tp_pos_list, figsize=figsize)
     
 
     def plot_angular_correlations(self, figsize=(10, 10)):
@@ -356,13 +196,13 @@ class BackTrackerPlotter:
         Returns:
             _type_: _description_
         """
-        df_mc_copy = self.ws.mc.copy()
+        df_mc_copy = self.data.mc.copy()
         df_mc_copy['rQ_U'] = df_mc_copy.detQ_U/df_mc_copy.totQ_U
         df_mc_copy['rQ_V'] = df_mc_copy.detQ_V/df_mc_copy.totQ_V
         df_mc_copy['rQ_X'] = df_mc_copy.detQ_X/df_mc_copy.totQ_X
 
 
-        y = df_mc_copy.join(self.ws.angles.set_index('event'), on='event')
+        y = df_mc_copy.join(self.data.angles.set_index('event'), on='event')
 
         m = '.'
         figsize=(12,10)
@@ -445,11 +285,11 @@ class BackTrackerPlotter:
         Returns:
             _type_: _description_
         """
-        df_mc_copy = self.ws.mc.copy()
+        df_mc_copy = self.data.mc.copy()
         df_mc_copy['rQ_U'] = df_mc_copy.detQ_U/df_mc_copy.totQ_U
         df_mc_copy['rQ_V'] = df_mc_copy.detQ_V/df_mc_copy.totQ_V
         df_mc_copy['rQ_X'] = df_mc_copy.detQ_X/df_mc_copy.totQ_X
-        df_corr = df_mc_copy.join(self.ws.angles.set_index('event'), on='event')
+        df_corr = df_mc_copy.join(self.data.angles.set_index('event'), on='event')
 
         m='.'
         fig, ax = plt.subplots(3,3, figsize=figsize)
