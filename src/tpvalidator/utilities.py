@@ -34,15 +34,16 @@ def pandas_backend(backend):
     import pandas as pd
 
     current_backend = pd.options.plotting.backend
-    print('xxx')
     pd.options.plotting.backend = backend
     yield
-    print('yyy')
     pd.options.plotting.backend = current_backend
 
-
-
-# Move elsewhere
+##
+#
+# TODO: Cleanup
+# Outdated - possibly replaced by workspace
+#
+##
 
 _tpgtree_folder_name = 'triggerana'
 _tpgtree_tp_tree_name = 'tree'
