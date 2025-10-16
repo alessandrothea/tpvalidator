@@ -222,7 +222,7 @@ class BackTrackerPlotter:
 
             # tp = inspect_tps.iloc[tp_idx]
             tp_plane = int(tp.TP_plane)
-            selected_tps.loc[len(selected_tps)] = tp
+            # selected_tps.loc[len(selected_tps)] = tp
 
             ch_id = int(tp.TP_channel)
 

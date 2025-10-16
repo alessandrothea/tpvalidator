@@ -251,7 +251,7 @@ def df_to_TP_rates(df_tp: pd.DataFrame) -> int:
     Calculate the TP rates from the TP dataframe
     '''
     sampling_time = 0.5e-6 # Sampling time 1/2 usec
-    tot_samples_est = (df_tp.groupby('event').TP_peakT.max()-df_tp.groupby('event').TP_peakT.min()).sum()
+    tot_samples_est = (df_tp.groupby('event').adc_peak.max()-df_tp.groupby('event').adc_peak.min()).sum()
     tot_time_est = tot_samples_est*sampling_time
     n_tps = len(df_tp)
 

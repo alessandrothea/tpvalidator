@@ -8,9 +8,9 @@ import mistletoe as mt
 import uproot
 import textwrap
 import logging
-import tpvalidator.workspace as workspace
+import tpvalidator.mcprod.workspace as workspace
 import tpvalidator.utilities as utils
-import tpvalidator.analyzers.snn as snn
+import tpvalidator.mcprod.analyzers.snn as snn
 
 from rich import print
 from rich.logging import RichHandler
@@ -36,19 +36,20 @@ import functools
 
 log_prep = logging.getLogger('prepare_figures')
 def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) -> dict:
+    print("Generate figures")
 
     # Analyze the entire dataset
     all_tps = snn.TPSignalNoisePreSelection(ws.tps)
     alltp_ana = snn.TPSignalNoiseAnalyzer(all_tps, sig_label='Ar39')
 
     # create analyzers
-    tps = snn.TPSignalNoisePreSelection(ws.tps[(ws.tps.TP_startT >100) & (ws.tps.TP_startT <8100)])
+    tps = snn.TPSignalNoisePreSelection(ws.tps[(ws.tps.sample_start >100) & (ws.tps.sample_start <8100)])
     tp_ana = snn.TPSignalNoiseAnalyzer(tps, sig_label='Ar39')
-
 
     pf = Portfolio(output_dir, 'ar39')
 
-    pf.add_figure('adc_dist', functools.partial(snn.draw_signal_and_noise_adc_distros, ws))
+    if ws.rawdigis_events:
+        pf.add_figure('adc_dist', functools.partial(snn.draw_signal_and_noise_adc_distros, ws))
 
 
     # 2 Ar39 point of origin on the xy, xz and yz planes
@@ -56,25 +57,25 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
 
     # 3 Ar39 point of origin on the xy, xz and yz planes
     pf.add_figure('x_pos_dist_all_tps', alltp_ana.draw_tp_sig_drift_depth_dist)
-    pf.add_figure('x_pos_weighted_dist_all_tps', functools.partial(alltp_ana.draw_tp_sig_drift_depth_dist, weight_by="SADC"))
+    pf.add_figure('x_pos_weighted_dist_all_tps', functools.partial(alltp_ana.draw_tp_sig_drift_depth_dist, weight_by="adc_integral"))
 
     # Distribution of signat tps time in the drift direction
-    pf.add_figure('start_time_dist_all_tps', alltp_ana.draw_tp_start_time_dist)
+    pf.add_figure('start_time_dist_all_tps', alltp_ana.draw_tp_start_sample_dist)
 
 
-    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 26'))
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('adc_peak > 26'))
     pf.add_figure('event_10_peak26_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
-    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 36'))
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('adc_peak > 36'))
     pf.add_figure('event_10_peak36_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
-    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 46'))
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('adc_peak > 46'))
     pf.add_figure('event_10_peak46_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
-    x = snn.TPSignalNoiseAnalyzer(all_tps.query('TP_peakADC > 56'))
+    x = snn.TPSignalNoiseAnalyzer(all_tps.query('adc_peak > 56'))
     pf.add_figure('event_10_peak56_all_tps', functools.partial(x.draw_tp_event, 10), fmt='png')
 
     # Plot ides time distribution
     def plot_ides_time():
         fig, ax = plt.subplots()
-        ws.ides.time.plot.hist(bins=1000, ax=ax)
+        ws.ides.timestamp.plot.hist(bins=1000, ax=ax)
         ax.set_xlabel('time')
         ax.set_ylabel('counts')
         return fig
@@ -82,37 +83,37 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
     pf.add_figure('ides_time_dist_all_tps', plot_ides_time)
 
     # Draw TP start time distribution after cleaning
-    pf.add_figure('start_time_dist', tp_ana.draw_tp_start_time_dist)
+    pf.add_figure('start_time_dist', tp_ana.draw_tp_start_sample_dist)
 
     # Draw signal and noise distributions
     pf.add_figure('vs_elnoise_var_dist', tp_ana.draw_tp_signal_noise_dist)
 
-    # Draw grid of tp peakADC, TOT and SADC dist in bins of depth
-    pf.add_figure('peakadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'peakADC', downsampling=10, sharex=True, sharey=True, figsize=(12,10)))
-    pf.add_figure('tot_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'TOT', downsampling=1, log=False, sharey=True, figsize=(12,10)))
-    pf.add_figure('sadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'SADC', downsampling=100, sharey=True, figsize=(12,10)))
+    # Draw grid of tp adc_peak, samples_over_threshold and adc_integral dist in bins of depth
+    pf.add_figure('peakadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'adc_peak', downsampling=10, sharex=True, sharey=True, figsize=(12,10)))
+    pf.add_figure('tot_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'samples_over_threshold', downsampling=1, log=False, sharey=True, figsize=(12,10)))
+    pf.add_figure('sadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'adc_integral', downsampling=100, sharey=True, figsize=(12,10)))
 
-    # Draw grid of tp peakADC, TOT and SADC dist in bins of depth
-    pf.add_figure('peak_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'peakADC', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
-    pf.add_figure('tot_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'TOT', downsampling=1, n_x_bins=4, log=False, figsize=(5,4)))
-    pf.add_figure('sadc_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'SADC', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
+    # Draw grid of tp adc_peak, samples_over_threshold and adc_integral dist in bins of depth
+    pf.add_figure('peak_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'adc_peak', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
+    pf.add_figure('tot_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'samples_over_threshold', downsampling=1, n_x_bins=4, log=False, figsize=(5,4)))
+    pf.add_figure('sadc_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'adc_integral', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
 
     # Draw the impact of cuts on TP distributions
     cuts = [t for t in range(26, 50, 5)]
-    pf.add_figure('dists_with_peakadc_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'peakADC', cuts, log=True, figsize=(15, 10)))
+    pf.add_figure('dists_with_peakadc_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'adc_peak', cuts, log=True, figsize=(15, 10)))
     cuts = [t for t in range(0,10,2)]
-    pf.add_figure('dists_with_tot_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'TOT', cuts, log=True, figsize=(15, 10)))
+    pf.add_figure('dists_with_tot_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'samples_over_threshold', cuts, log=True, figsize=(15, 10)))
     cuts = [t for t in range(0, 500, 100)]
-    pf.add_figure('dists_with_sadcs_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'SADC', cuts, log=True, figsize=(15, 10)))
+    pf.add_figure('dists_with_sadcs_cuts', functools.partial( tp_ana.draw_variable_cut_sequence, 'adc_integral', cuts, log=True, figsize=(15, 10)))
 
 
     # Draw the impact of cuts on TP distributions
     thresholds = [t for t in range(26, 120, 1)]
-    pf.add_figure('peak_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'peakADC', thresholds))
+    pf.add_figure('peak_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'adc_peak', thresholds))
     thresholds = [t for t in range(0,10,2)]
-    pf.add_figure('tot_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'TOT', thresholds))
+    pf.add_figure('tot_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'samples_over_threshold', thresholds))
     thresholds = [t for t in range(0, 500, 100)]
-    pf.add_figure('sadc_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'SADC', thresholds))
+    pf.add_figure('sadc_thresh_scan_perf', functools.partial( tp_ana.draw_threshold_scan, 'adc_integral', thresholds))
 
     return
 
@@ -155,12 +156,13 @@ def write_report(figures_dir, report_file):
                         * TP data file: **{notes['tp_file_path']}**
                         * Waveforms data: **{notes['wf_file_path']}**
                         * Detector geometry: **{notes['ws_info']['geo']['detector']}**
-                        * MC generator(s): **{', '.join(notes['ws_info']['mc_generator_labels'])}**
-                            * Algorithm: **{notes['ws_info']['tpg']['tool']}**
-                            * Threshold U: **{notes['ws_info']['tpg']['threshold_tpg_plane0']}**
-                            * Threshold V: **{notes['ws_info']['tpg']['threshold_tpg_plane1']}**
-                            * Threshold X/Z: **{notes['ws_info']['tpg']['threshold_tpg_plane2']}**
-                        * Event: **{notes['event_begin']}-{notes['event_end']}**
+                        * MC generator(s): **{', '.join(notes['mc_generator_labels'])}**
+                        * TP generation details:
+                            * Algorithm: **{notes['tpg_info']['tool']}**
+                            * Threshold U: **{notes['tpg_info']['threshold_tpg_plane0']}**
+                            * Threshold V: **{notes['tpg_info']['threshold_tpg_plane1']}**
+                            * Threshold X/Z: **{notes['tpg_info']['threshold_tpg_plane2']}**
+                        * Events: **{notes['event_begin']}-{notes['event_end']}**
                         """, tag_styles=tag_styles, li_prefix_color=color_orange)
     
     # ---------------------------------------------------------------------
@@ -212,8 +214,8 @@ def write_report(figures_dir, report_file):
     pdf.move_cursor(dy=5)
     img_w = pdf.epw//2
     with pdf.local_context(font_size_pt = 10):
-        pdf.cell(w=img_w, text="a) peakADC>26", markdown=True, align=Align.C)
-        pdf.cell(w=img_w, text="b) peakADC>36", markdown=True, align=Align.C)
+        pdf.cell(w=img_w, text="a) adc_peak>26", markdown=True, align=Align.C)
+        pdf.cell(w=img_w, text="b) adc_peak>36", markdown=True, align=Align.C)
 
     # pdf.mark_cursor(text="C")
     pdf.ln()
@@ -243,15 +245,15 @@ def write_report(figures_dir, report_file):
 
     with pdf.local_context(font_size_pt = 10):
 
-        pdf.cell(w=img_w, text="c) peakADC>46", markdown=True, align=Align.C)
-        pdf.cell(w=img_w, text="d) peakADC>56", markdown=True, align=Align.C)
+        pdf.cell(w=img_w, text="c) adc_peak>46", markdown=True, align=Align.C)
+        pdf.cell(w=img_w, text="d) adc_peak>56", markdown=True, align=Align.C)
 
     pdf.ln()
     # pdf.mark_cursor(text="I5")
 
     pdf.write_markdown(f"""
                 * Channel and peakT of TPs in event 10
-                * Incremental peakADC cuts are applied (from a) to d)) to show the distribution of TPs at higher peakADC.
+                * Incremental adc_peak cuts are applied (from a) to d)) to show the distribution of TPs at higher adc_peak.
                 * NOTE: A lack of signal TPs is evident at peakT > 8200 for all planes. In this region noise TPs have a harder spectrum:
                     A fraction survives the prakADC cut appearing very similar to signal TPs, suggesting that they may be untagged signal TPs.
                 """, tag_styles=tag_styles, li_prefix_color=color_orange)
@@ -273,7 +275,7 @@ def write_report(figures_dir, report_file):
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Ar39  - total SADC sum vs drift depth for signal TPs**", tag_styles=tag_styles)
+    pdf.write_markdown("# **Ar39  - total adc_integral sum vs drift depth for signal TPs**", tag_styles=tag_styles)
 
     pdf.image( figures_dir / 'ar39_x_pos_weighted_dist_all_tps.svg', w=pdf.epw, x=Align.C)
 
@@ -318,18 +320,18 @@ def write_report(figures_dir, report_file):
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Distribution of TP peakADC across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
+    pdf.write_markdown("# **Distribution of TP adc_peak across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
     pdf.image( figures_dir / 'ar39_peakadc_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Distribution of TP TOT across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
+    pdf.write_markdown("# **Distribution of TP samples_over_threshold across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
     pdf.image( figures_dir / 'ar39_tot_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Distribution of TP SADC across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
+    pdf.write_markdown("# **Distribution of TP adc_integral across the drift**\nBins of trueX - plane 2 (collection)", tag_styles=tag_styles)
     pdf.image( figures_dir / 'ar39_sadc_dist_in_drift_bins.svg', w=pdf.eph, x=Align.C)
 
 
@@ -346,11 +348,11 @@ def write_report(figures_dir, report_file):
     pdf.set_y(y)
     pdf.image( figures_dir / 'ar39_sadc_dist_stack_in_drift_bins.svg', w=pdf.epw//3, x=x+2*pdf.epw//3)
     pdf.write_markdown("""
-                Comparison of peakADC, TOT and SADC for in 4 regions of trueX for the collection plane.
+                Comparison of adc_peak, samples_over_threshold and adc_integral for in 4 regions of trueX for the collection plane.
     """, tag_styles=tag_styles)
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Effects of peakADC cuts on distributions**", tag_styles=tag_styles)
+    pdf.write_markdown("# **Effects of adc_peak cuts on distributions**", tag_styles=tag_styles)
 
     pdf.image( figures_dir / 'ar39_dists_with_peakadc_cuts.svg', h=pdf.eph*0.9, x=Align.L)
 
@@ -358,7 +360,7 @@ def write_report(figures_dir, report_file):
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **Effects of TOT cuts on distributions**", tag_styles=tag_styles)
+    pdf.write_markdown("# **Effects of samples_over_threshold cuts on distributions**", tag_styles=tag_styles)
 
     pdf.image( figures_dir / 'ar39_dists_with_tot_cuts.svg', h=pdf.eph*0.9, x=Align.L)
 
@@ -383,7 +385,7 @@ def write_report(figures_dir, report_file):
 
     # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **TOT cuts noise rejection efficiency**", tag_styles=tag_styles)
+    pdf.write_markdown("# **samples_over_threshold cuts noise rejection efficiency**", tag_styles=tag_styles)
 
     pdf.image( figures_dir / 'ar39_tot_thresh_scan_perf.svg', w=pdf.epw*0.95, x=Align.C)
 
@@ -391,7 +393,7 @@ def write_report(figures_dir, report_file):
 
         # ---------------------------------------------------------------------
     pdf.add_page()
-    pdf.write_markdown("# **SADC cuts noise rejection efficiency**", tag_styles=tag_styles)
+    pdf.write_markdown("# **adc_integral cuts noise rejection efficiency**", tag_styles=tag_styles)
 
     pdf.image( figures_dir / 'ar39_sadc_thresh_scan_perf.svg', w=pdf.epw*0.95, x=Align.C)
 
@@ -400,7 +402,7 @@ def write_report(figures_dir, report_file):
     pdf.output(report_file)
 
 
-def main(tp_file_path : str, wf_file_path: str, event_range=None, make_figures:bool=True, interactive: bool=False):
+def main(tp_file_path : str, wf_file_path: str, entry_range=None, make_figures:bool=True, interactive: bool=False):
 
     report_dir = Path('./reports/ar39/')
     figures_dir = report_dir / 'figures'
@@ -409,23 +411,27 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, make_figures:b
     if make_figures:
 
         with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.INFO):
-            event_begin, event_end = event_range if not event_range is None else (0, None)
-            ws = workspace.TriggerPrimitivesWorkspace(tp_file_path, event_begin, event_end)
+            entry_begin, entry_end = entry_range if not entry_range is None else (0, None)
+            ws = workspace.TriggerPrimitivesWorkspace(tp_file_path, entry_begin, entry_end)
 
             print(ws.info)
-            if wf_file:
-                ws.add_rawdigits(wf_file)
+            if wf_file_path:
+                ws.add_rawdigits(wf_file_path)
+
+        events = ws.event_summary.event.unique()
 
         notes = {
             'tp_file_path': tp_file_path,
             'wf_file_path': wf_file_path,
             'ws_info': ws.info,
-            'event_begin': event_begin,
-            'event_end': event_end
+            'mc_generator_labels': list(ws.mctruth_blocks_map.values()),
+            'tpg_info': ws.info['tpg'][ws.tp_maker_name],
+            'event_begin': int(min(events)),
+            'event_end': int(max(events))
         }
 
         with open(figures_dir / 'notes.json', 'w') as fp:
-            json.dump(notes, fp)
+            json.dump(notes, fp, indent=4)
 
         if interactive:
             import IPython
@@ -436,15 +442,13 @@ def main(tp_file_path : str, wf_file_path: str, event_range=None, make_figures:b
             images = prepare_figures(ws, figures_dir)
             print(images)
 
-
-
-
     # ------
     if make_report:
         write_report(figures_dir, report_dir / "ar39_report.pdf")
 
 if __name__ == '__main__':
-    tp_tree_file = 'data/vd/ar39/100events/tptree_st_tpg_vd_ar39.root'
+    tp_tree_file = 'data/vd/ar39/100events/trigtree_tpg_vd_ar39.root'
     wf_file = 'data/vd/ar39/100events/trigger_digits_waves_detsim_vd_ar39.root'
 
-    main(tp_tree_file, wf_file, event_range=(0, 100), interactive=False)
+    main(tp_tree_file, wf_file, entry_range=(0, 99), interactive=False)
+    # main(tp_tree_file, None, entry_range=(0,10), interactive=False)

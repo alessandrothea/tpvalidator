@@ -221,7 +221,7 @@ class TPSignalNoiseAnalyzer:
 
         x_label = 'drift depth [x]'
         y_label = weight_by if weight_by else 'counts'
-        weight_var = f'TP_{weight_by}' if weight_by else ''
+        weight_var = weight_by if weight_by else ''
         sup_title = f"{ weight_by+" sum" if weight_by else 'TP count' } vs true drift depth for signal TPs"
 
         fig,axes = plt.subplots(1, 3, sharey=True, figsize=figsize)
