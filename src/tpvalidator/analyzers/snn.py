@@ -14,7 +14,7 @@ import cmocean.cm as cmo
 
 from ..histograms import uproot_hist_mean_std, calculate_natural_bins
 from ..workspace import TriggerPrimitivesWorkspace
-from ..utilities import subplot_autogrid, df_to_TP_rates
+from ..utilities import subplot_autogrid, df_to_tp_rates
 
 
 
@@ -536,8 +536,8 @@ class TPSignalNoiseAnalyzer:
 
         n_sig_tps = [len(df_sig[(df_sig[col] > t)]) for t in thresholds]
         n_noise_tps = [len(df_noise[(df_noise[col] > t)]) for t in thresholds]
-        rate_sig_tps = [df_to_TP_rates(df_sig[(df_sig[col] > t)]) for t in thresholds]
-        rate_noise_tps = [df_to_TP_rates(df_noise[(df_noise[col] > t)]) for t in thresholds]
+        rate_sig_tps = [df_to_tp_rates(df_sig[(df_sig[col] > t)]) for t in thresholds]
+        rate_noise_tps = [df_to_tp_rates(df_noise[(df_noise[col] > t)]) for t in thresholds]
 
 
         df = pd.DataFrame({

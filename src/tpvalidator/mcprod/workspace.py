@@ -159,7 +159,7 @@ class TriggerPrimitivesWorkspace:
             pd.DataFrame: Dataframe filled with TTree entries
         """
         tree = getattr(self, f'{df_id}_tree')
-        ev_cut = self.get_event_cut(tree) if tree.num_entries > 0 else None
+        ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
         self._log.debug(f"Applying event cut to {df_id}")
         return tree.arrays(library="pd", cut=ev_cut)
 
@@ -178,7 +178,15 @@ class TriggerPrimitivesWorkspace:
         self.tps['bt_is_signal'] = self.tps.bt_numelectrons > 0
 
 
-    def get_event_cut(self, tree) -> str:
+    def get_event_selection_str(self, tree) -> str:
+        """Returns the event selection string based on the first/last entry fields
+
+        Args:
+            tree (uproot.Tree): ROOT Tree the selection will be applied to
+
+        Returns:
+            str: query selection string
+        """
 
         ev_list = self._events(tree)
 
@@ -193,7 +201,7 @@ class TriggerPrimitivesWorkspace:
         event_cut =  ' & '.join(cuts) if len(cuts) > 0 else None
         return event_cut
 
-    
+    # tree getters
     @property
     def event_summary(self):
         if self._event_summary is None:
@@ -246,8 +254,19 @@ class TriggerPrimitivesWorkspace:
             self._mctruth_blocks = dict(
                 self.mctruths[["block_id", "generator_name"]].drop_duplicates().values
             )
-        return self._mctruth_blocks
+        return self._mctruth_block
+    
+    #
+    # Workspace properties
+    # 
+    @property
+    def num_events(self) -> int :
+        """Number of events in the workspace, based on the event_summary tree
 
+        Returns:
+            int: number of events in the workspace
+        """
+        return len(self.event_summary.groupby(by=['event', 'run', 'subrun']))
 
 
     #

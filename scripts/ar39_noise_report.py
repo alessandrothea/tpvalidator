@@ -130,8 +130,14 @@ def write_report(figures_dir, report_file):
     pdf.add_font('OpenSans', 'B', '/Library/Fonts/OpenSans_Bold.ttf')
     pdf.add_font('Roboto', '', '/Library/Fonts/Roboto_Regular.ttf')
     pdf.add_font('Roboto', 'B', '/Library/Fonts/Roboto_Regular.ttf')
-
-    pdf.set_font("OpenSans", size=15)
+    pdf.add_font('Lato', '', '/Users/ale/Library/Fonts/Lato-Regular.ttf')
+    pdf.add_font('Lato', 'B', '/Users/ale/Library/Fonts/Lato-Bold.ttf')
+    pdf.add_font('Consolas', '', '/Users/ale/Library/Fonts/Consolas.ttf')
+    pdf.add_font('Consolas', 'B', '/Users/ale/Library/Fonts/Consolas Bold.ttf')
+    pdf.add_font('SourceCodePro', '', '/Users/ale/Library/Fonts/SourceCodePro-Medium.ttf')
+    pdf.add_font('SourceCodePro', 'B', '/Users/ale/Library/Fonts/SourceCodePro-Semibold.ttf')
+    
+    pdf.set_font("Lato", size=15)
 
     color_blue = "#093fb5ff"
     color_orange = "#f06000"
@@ -139,6 +145,7 @@ def write_report(figures_dir, report_file):
     tag_styles={
         "h1": FontFace(color=color_blue, size_pt=28, family='Raleway'),
         "h2": FontFace(color=color_orange, size_pt=24, family='Raleway'),
+        "code": FontFace(family='Consolas'),
 
     }
 
@@ -201,7 +208,7 @@ def write_report(figures_dir, report_file):
     """, tag_styles=tag_styles)
 
 
-    # Page 3
+    # Page 4
     # ---------------------------------------------------------------------
     pdf.add_page()
     pdf.write_markdown("# **Example event: signal and noise TPs**", tag_styles=tag_styles)
@@ -252,9 +259,9 @@ def write_report(figures_dir, report_file):
     # pdf.mark_cursor(text="I5")
 
     pdf.write_markdown(f"""
-                * Channel and peakT of TPs in event 10
+                * Channel and `sample_peak` of TPs in event 10
                 * Incremental adc_peak cuts are applied (from a) to d)) to show the distribution of TPs at higher adc_peak.
-                * NOTE: A lack of signal TPs is evident at peakT > 8200 for all planes. In this region noise TPs have a harder spectrum:
+                * NOTE: A lack of signal TPs is evident at `sample_peak > 8200` for all planes. In this region noise TPs have a harder spectrum:
                     A fraction survives the prakADC cut appearing very similar to signal TPs, suggesting that they may be untagged signal TPs.
                 """, tag_styles=tag_styles, li_prefix_color=color_orange)
 
@@ -303,7 +310,7 @@ def write_report(figures_dir, report_file):
     pdf.image( figures_dir / 'ar39_start_time_dist.svg', w=pdf.epw*0.9, x=Align.L)
     pdf.write_markdown("""
                 * Distribution of TP startTime after applying cleanup
-                * startT > 100 && startT < 8200
+                * `sample_start > 100 && sample_start < 8200`
     """, tag_styles=tag_styles)
 
     # ---------------------------------------------------------------------
@@ -401,18 +408,28 @@ def write_report(figures_dir, report_file):
 
     pdf.output(report_file)
 
+import click
 
-def main(tp_file_path : str, wf_file_path: str, entry_range=None, make_figures:bool=True, interactive: bool=False):
+@click.command()
+@click.argument("tp_file_path", type=click.Path(dir_okay=False))
+@click.argument("wf_file_path",type=click.Path(dir_okay=False))
+@click.option('-f', '--first_entry', type=int, default=0)
+@click.option('-l', '--last_entry', type=int, default=None)
+@click.option('-i', 'interactive', is_flag=True, default=False)
+@click.option('--figs/--no-figs', 'make_figures', default=True)
+@click.option('-o', 'output_dir', type=click.Path(file_okay=False, exists=True), default='./reports/ar39/')
+def cli(tp_file_path, wf_file_path, output_dir, first_entry, last_entry, make_figures, interactive):
 
-    report_dir = Path('./reports/ar39/')
+    # report_dir = Path('./reports/ar39/')
+    report_dir = Path(output_dir)
     figures_dir = report_dir / 'figures'
 
     make_report = True
     if make_figures:
 
         with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.INFO):
-            entry_begin, entry_end = entry_range if not entry_range is None else (0, None)
-            ws = workspace.TriggerPrimitivesWorkspace(tp_file_path, entry_begin, entry_end)
+            # entry_begin, entry_end = entry_range if not entry_range is None else (0, None)
+            ws = workspace.TriggerPrimitivesWorkspace(tp_file_path, first_entry, last_entry)
 
             print(ws.info)
             if wf_file_path:
@@ -447,8 +464,9 @@ def main(tp_file_path : str, wf_file_path: str, entry_range=None, make_figures:b
         write_report(figures_dir, report_dir / "ar39_report.pdf")
 
 if __name__ == '__main__':
-    tp_tree_file = 'data/vd/ar39/100events/trigtree_tpg_vd_ar39.root'
-    wf_file = 'data/vd/ar39/100events/trigger_digits_waves_detsim_vd_ar39.root'
+    # tp_tree_file = 'data/vd/ar39/100events/trigtree_tpg_vd_ar39.root'
+    # wf_file = 'data/vd/ar39/100events/trigger_digits_waves_detsim_vd_ar39.root'
 
-    main(tp_tree_file, wf_file, entry_range=(0, 99), interactive=False)
+    # cli(tp_tree_file, wf_file, entry_range=(0, 99), interactive=False)
     # main(tp_tree_file, None, entry_range=(0,10), interactive=False)
+    cli()

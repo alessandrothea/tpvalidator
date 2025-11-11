@@ -14,7 +14,7 @@ import cmocean.cm as cmo
 
 from ...histograms import uproot_hist_mean_std, calculate_natural_bins
 from ..workspace import TriggerPrimitivesWorkspace
-from ...utilities import subplot_autogrid, df_to_TP_rates
+from ...utilities import subplot_autogrid, df_to_tp_rates
 
 
 
@@ -26,12 +26,12 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     # these are matplotlib.patch.Patch properties
     props = dict(boxstyle='round', facecolor='white', alpha=0.5)
     view_range = 20
-    stat_x = 0.05
+    stat_x = 0.95
     stat_y = 0.95
     v_lw=0.5
 
-    thres_x = 0.8
-    thres_y = 0.95
+    thres_x = 0.925
+    thres_y = 0.85
 
     # -- draw
     fig,axes= plt.subplots(1,3, figsize=figsize)
@@ -53,14 +53,14 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
 
     # place a text box in top center in axes coords
     ax.text(stat_x, stat_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left', bbox=props)
+            verticalalignment='top', horizontalalignment='right', bbox=props)
 
     textstr = '\n'.join((
         f'$3\\sigma={int(3*sigma)}$',
         f'$5\\sigma={int(5*sigma)}$'
         ))
     ax.text(thres_x, thres_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left')
+            verticalalignment='top', horizontalalignment='right')
 
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
@@ -84,14 +84,14 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
 
     # place a text box in top center in axes coords
     ax.text(stat_x, stat_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left', bbox=props)
+            verticalalignment='top', horizontalalignment='right', bbox=props)
 
     textstr = '\n'.join((
         f'$3\\sigma={int(3*sigma)}$',
         f'$5\\sigma={int(5*sigma)}$'
         ))
     ax.text(thres_x, thres_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left')
+            verticalalignment='top', horizontalalignment='right')
 
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
@@ -115,14 +115,14 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
         f'$\\sigma={sigma:.2f}$'))
     # place a text box in top center in axes coords
     ax.text(stat_x, stat_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left', bbox=props)
+            verticalalignment='top', horizontalalignment='right', bbox=props)
 
     textstr = '\n'.join((
         f'$3\\sigma={int(3*sigma)}$',
         f'$5\\sigma={int(5*sigma)}$'
         ))
     ax.text(thres_x, thres_y, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', horizontalalignment='left')
+            verticalalignment='top', horizontalalignment='right')
 
     ax.axvline(mu, color='b', ls='--', lw=v_lw)
     ax.axvline(thrs_3s, color='r', lw=v_lw)
@@ -131,28 +131,60 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
 
     for ax in axes:
         ax.set_yscale("log")
-        ax.legend([signal_label, 'noise'])
+        ax.legend([f"{signal_label}+noise", 'noise'])
 
     fig.tight_layout()
     return fig
 
 class TPSignalNoisePreSelection:
-    def __init__(self, tps, ):
+    def __init__(self, tps):
 
         self.all = tps
 
-        self.p0 = tps[tps.readout_view == 0]
-        self.p1 = tps[tps.readout_view == 1]
-        self.p2 = tps[tps.readout_view == 2]
+        self.all_view_0 = tps.query('readout_view == 0')
+        self.all_view_1 = tps.query('readout_view == 1')
+        self.all_view_2 = tps.query('readout_view == 2')
 
+        self.sig_view_0 = self.all_view_0.query('bt_is_signal != 0')
+        self.sig_view_1 = self.all_view_1.query('bt_is_signal != 0')
+        self.sig_view_2 = self.all_view_2.query('bt_is_signal != 0')
 
-        self.sig_p0 = self.p0[self.p0.bt_is_signal != 0]
-        self.sig_p1 = self.p1[self.p1.bt_is_signal != 0]
-        self.sig_p2 = self.p2[self.p2.bt_is_signal != 0]
+        self.noise_view_0 = self.all_view_0.query('bt_is_signal == 0')
+        self.noise_view_1 = self.all_view_1.query('bt_is_signal == 0')
+        self.noise_view_2 = self.all_view_2.query('bt_is_signal == 0')
+        
+        # TODO: remove
+        # legacy aliases
+        self.p0 = self.all_view_0
+        self.p1 = self.all_view_1
+        self.p2 = self.all_view_2
 
-        self.noise_p0 = self.p0[self.p0.bt_is_signal == 0]
-        self.noise_p1 = self.p1[self.p1.bt_is_signal == 0]
-        self.noise_p2 = self.p2[self.p2.bt_is_signal == 0]
+        self.sig_p0 = self.sig_view_0
+        self.sig_p1 = self.sig_view_1
+        self.sig_p2 = self.sig_view_2
+
+        self.noise_p0 = self.noise_view_0
+        self.noise_p1 = self.noise_view_1
+        self.noise_p2 = self.noise_view_2
+
+        self.all_by_view = {
+            0 : self.all_view_0,
+            1 : self.all_view_1,
+            2 : self.all_view_2,
+        }
+        
+        self.sig_by_view = {
+            0 : self.sig_view_0,
+            1 : self.sig_view_1,
+            2 : self.sig_view_2,
+        }
+
+        self.noise_by_view = {
+            0 : self.noise_view_0,
+            1 : self.noise_view_1,
+            2 : self.noise_view_2,
+        }  
+
 
 
     def __len__(self) -> int:
@@ -164,9 +196,14 @@ class TPSignalNoisePreSelection:
 
 class TPSignalNoiseAnalyzer:
 
-    def __init__(self, tp_selection: TPSignalNoisePreSelection, sig_label='Signal'):
+    def __init__(self, 
+                 tp_selection: TPSignalNoisePreSelection, 
+                 signal_name: str ='signal',
+                 readout_window: int=None,
+                 ):
         self.tps = tp_selection
-        self.sig_label = sig_label
+        self.signal_name = signal_name
+        self.readout_window = readout_window
 
     def draw_tp_sig_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
         fig,axes= plt.subplots(3,3, figsize=figsize)
@@ -289,7 +326,7 @@ class TPSignalNoiseAnalyzer:
         ax.set_ylim(bottom=1) 
         ax.legend(['Signal', 'Noise'])
 
-        fig.suptitle(f"{self.sig_label} and Noise TPs distribution in peak time")
+        fig.suptitle(f"{self.signal_name} and Noise TPs distribution in peak time")
         fig.tight_layout()
         return fig
     
@@ -335,7 +372,18 @@ class TPSignalNoiseAnalyzer:
         fig.tight_layout()
         return fig
     
-    def draw_tp_signal_noise_dist(self, figsize=(12,5)):
+
+    def draw_tp_signal_noise_dist(self, roview: int=2, figsize=(12,5)) -> mpl.figure.Figure:
+        """Draw the distributions of adc_peak, adc_integral, and samples_over_threshold variables
+
+        Args:
+            figsize (tuple, optional): Figure size. Defaults to (12,5).
+
+        Returns:
+            mpl.figure.Figure: A figure containing the 3 distributions
+        """
+        max_bins = 1024
+        
         fig, axes= plt.subplots(1,3, figsize=figsize, sharey=True)
         tps=self.tps
 
@@ -343,32 +391,36 @@ class TPSignalNoiseAnalyzer:
 
         var_list = ['adc_peak', 'adc_integral', 'samples_over_threshold']
         for i,var in enumerate(var_list):
-            col = f'{var}'
 
-            x_min=tps.p2[col].min()
-            x_max=tps.p2[col].max()
+            # Auto-bin
+            # Find the variable range
+            x_min=tps.all_by_view[roview][var].min()
+            x_max=tps.all_by_view[roview][var].max()
             x_range=(x_max-x_min)
-            n_bins=int(x_range)
-            dx = x_range/n_bins
+            if x_range < max_bins:
+                n_bins=int(x_range)
+                dx = x_range/n_bins
+            else:
+                dx = float((x_range // max_bins)+1)
+                n_bins = int(x_range/dx)
             bins = [ (x_min + i*dx) for i in range(n_bins+1)]
             ax=axes[i]
-            tps.sig_p2[col].hist(bins=bins, ax=ax,log=True, alpha=0.75)
+            tps.sig_by_view[roview][var].hist(bins=bins, ax=ax,log=True, alpha=0.75)
             ax.set_ylabel(f"Counts")
             ax.set_xlabel(f"{var}")
-            tps.noise_p2[col].hist(bins=bins, ax=ax,log=True, alpha=0.75)
-            tps.p2[col].hist(bins=bins, ax=ax, edgecolor='black', histtype='step', log=True)
-            # ax.set_xlabel(f"{var}")
+            tps.noise_by_view[roview][var].hist(bins=bins, ax=ax,log=True, alpha=0.75)
+            tps.all_by_view[roview][var].hist(bins=bins, ax=ax, edgecolor='black', histtype='step', log=True)
             ax.set_title(var)
 
-            ax.legend((f'{self.sig_label}+Noise', self.sig_label, 'noise'))
+            ax.legend((f'{self.signal_name}+noise', self.signal_name, 'noise'))
 
-        fig.suptitle(f"{', '.join(var_list)} distributions for : {self.sig_label} vs Noise")
+        fig.suptitle(f"{', '.join(var_list)} distributions for : {self.signal_name} vs noise")
         fig.tight_layout()
         return fig
     
 
     def draw(self, var, n_x_bins=30, log=False, figsize=(10,8)):
-        """What does this draw?
+        """What does this draw? Obsolete!
 
         Args:
             var (_type_): _description_
@@ -459,8 +511,38 @@ class TPSignalNoiseAnalyzer:
         return fig
     
 
-    def draw_variable_cut_sequence(self, var, thresholds, log=False, figsize=(12,5)):
+    def draw_variable_cut_sequence(self, var:str , thresholds, log=False, figsize=(12,5)):
+        
+        """Draw the impact of a set of incremantal cuts on 'var' over 
+         'adc_peak', 'adc_integral', 'samples_over_threshold' variables
+
+        Args:
+            var (_type_): _description_
+            thresholds (_type_): _description_
+            log (bool, optional): _description_. Defaults to False.
+            figsize (tuple, optional): _description_. Defaults to (12,5).
+
+        Returns:
+            _type_: _description_
+        """
         tps=self.tps
+
+        var_list = ['adc_peak', 'adc_integral', 'samples_over_threshold']
+        var_labels = {
+            'samples_over_threshold': 'sot',
+            'adc_peak': 'adc peak',
+            'adc_integral': 'adc int.',
+        }
+
+        bins_adc_peak = calculate_natural_bins(tps.p2.adc_peak, 5)
+        bins_adc_int = calculate_natural_bins(tps.p2.adc_integral, 5)
+        bins_SOT = calculate_natural_bins(tps.p2.samples_over_threshold, 1)
+
+        bins_map = {
+            'samples_over_threshold': bins_SOT,
+            'adc_peak': bins_adc_peak,
+            'adc_integral': bins_adc_int,
+        }
 
         # cmap='tab20'
         cmap_name='cividis'
@@ -479,40 +561,30 @@ class TPSignalNoiseAnalyzer:
         ax_trailer = fig.add_subplot(gs[2, :-1])
         ax_table = fig.add_subplot(gs[2, -1:])
 
-        bins_adc_peak = calculate_natural_bins(tps.p2.adc_peak, 5)
-        bins_adc_int = calculate_natural_bins(tps.p2.adc_integral, 5)
-        bins_SOT = calculate_natural_bins(tps.p2.samples_over_threshold, 1)
-
         df = tps.sig_p2
 
-        axes[0][0].hist([df[df[var] > thres].adc_peak for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_adc_peak)
-        axes[0][0].set_title(self.sig_label)
-        axes[0][1].hist([df[df[var] > thres].adc_integral for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_adc_int)
-        axes[0][1].set_title(self.sig_label)
-        axes[0][2].hist([df[df[var] > thres].samples_over_threshold for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_SOT)
-        axes[0][2].set_title(self.sig_label)
-
-
-        for i,l in enumerate(['adc peak', 'ADC int', 'SOT']):
-            axes[0][i].set_xlabel(l)
-            axes[0][i].legend([f"{var} > {t}" for t in thresholds])
+        for i,v in enumerate(var_list):
+            b = bins_map[v]
+            axes[0][i].hist([df[df[var] > thres][v] for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=b)
+            axes[0][i].set_title(self.signal_name)
+            
+        for i,v in enumerate(var_list):
+            axes[0][i].set_xlabel(var_labels[v])
+            axes[0][i].legend([f"{var_labels.get(var, var)} > {t}" for t in thresholds])
 
             if log:
                 axes[0][i].set_yscale("log")
 
         df = tps.noise_p2
 
-
-        axes[1][0].hist([df[df[var] > thres].adc_peak for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_adc_peak)
-        axes[1][0].set_title('Noise')
-        axes[1][1].hist([df[df[var] > thres].adc_integral for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_adc_int)
-        axes[1][1].set_title('Noise')
-        axes[1][2].hist([df[df[var] > thres].samples_over_threshold for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=bins_SOT)
-        axes[1][2].set_title('Noise')
-
-        for i,l in enumerate(['adc peak', 'ADC int', 'SOT']):
-            axes[1][i].set_xlabel(l)
-            axes[1][i].legend([f"{var} > {t}" for t in thresholds])
+        for i,v in enumerate(var_list):
+            b = bins_map[v]
+            axes[1][i].hist([df[df[var] > thres][v] for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=b)
+            axes[1][i].set_title('Noise')
+            
+        for i,v in enumerate(var_list):
+            axes[1][i].set_xlabel(var_labels[v])
+            axes[1][i].legend([f"{var_labels.get(var, var)} > {t}" for t in thresholds])
 
             if log:
                 axes[1][i].set_yscale("log")
@@ -520,14 +592,14 @@ class TPSignalNoiseAnalyzer:
         df = tps.sig_p2
         ax_trailer.hist([df[df[var] > thres].bt_primary_x for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=100)
         ax_trailer.set_xlabel("drift coordinate")
-        ax_trailer.set_title(self.sig_label)
-        ax_trailer.legend([f"{var} > {t}" for t in thresholds])
+        ax_trailer.set_title(self.signal_name)
+        ax_trailer.legend([f"{var_labels.get(var, var)} > {t}" for t in thresholds])
 
         df = self.do_threshold_scan(2, var, thresholds)
         ax_table.axis('off')
         ax_table.axis('tight')
         df_table = df[['threshold', 'rate_sig', 'rate_noise']].copy()
-        df_table[['rate_sig', 'rate_noise']] = (df_table[['rate_sig', 'rate_noise']]/1e6).map('{:,.2f} MHz'.format)
+        df_table[['rate_sig', 'rate_noise']] = (df_table[['rate_sig', 'rate_noise']]/1e6).map('{:,.3f} MHz'.format)
 
         the_table = ax_table.table(cellText=df_table.values, colLabels=df_table.columns, loc='center')
         the_table.auto_set_column_width([0,1,2])
@@ -539,22 +611,35 @@ class TPSignalNoiseAnalyzer:
         return fig
     
 
-    def do_threshold_scan(self, plane_id, var, thresholds):
+    def do_threshold_scan(self, plane_id: int, var: str, values: list) -> pd.DataFrame:
+        """Performs a threshold scan on variable `var` on trigger primitives of plane `plane_id` 
+
+        Args:
+            plane_id (int): plane identifier
+            var (str): name of the variable to cut on
+            values (List[int]): threshold values
+
+        Returns:
+            pd.DataFrame: Dataframe containing number of signal and noise tps, and corresponding rates, for each threshold value
+        """
         
         tps=self.tps
-        col=var
 
         df_sig = getattr(tps, f'sig_p{plane_id:d}')
         df_noise = getattr(tps, f'noise_p{plane_id:d}')
 
-        n_sig_tps = [len(df_sig[(df_sig[col] > t)]) for t in thresholds]
-        n_noise_tps = [len(df_noise[(df_noise[col] > t)]) for t in thresholds]
-        rate_sig_tps = [df_to_TP_rates(df_sig[(df_sig[col] > t)]) for t in thresholds]
-        rate_noise_tps = [df_to_TP_rates(df_noise[(df_noise[col] > t)]) for t in thresholds]
+        df_sig_seq = [df_sig.query(f"{var} > {t}") for t in values]
+        df_noise_seq = [df_noise.query(f"{var} > {t}") for t in values]
+
+
+        n_sig_tps = [len(df) for df in df_sig_seq]
+        n_noise_tps = [len(df) for df in df_noise_seq]
+        rate_sig_tps = [df_to_tp_rates(df, self.readout_window) for df in df_sig_seq]
+        rate_noise_tps = [df_to_tp_rates(df, self.readout_window) for df in df_noise_seq]
 
 
         df = pd.DataFrame({
-            'threshold': thresholds,
+            'threshold': values,
             'n_sig': n_sig_tps,
             'n_noise': n_noise_tps,
             'rate_sig': rate_sig_tps,
@@ -573,7 +658,7 @@ class TPSignalNoiseAnalyzer:
     def draw_threshold_scan(self, var, thresholds, figsize=(12,6)):
 
         # Perform threshold scan on collection plane
-        df = self.do_threshold_scan( 2, var, thresholds)
+        df = self.do_threshold_scan(2, var, thresholds)
 
         fig,axes= plt.subplots(2,3, figsize=figsize)
 
@@ -587,20 +672,20 @@ class TPSignalNoiseAnalyzer:
         ax=axes[0][0]
         df.plot(x='noise_frac', y='sig_frac', lw=0.5,  ax=ax)
         s = df.plot.scatter(x='noise_frac', y='sig_frac', c='threshold', cmap=cmap, ax=ax)
-        ax.set_ylabel(f'{self.sig_label} fraction')
+        ax.set_ylabel(f'{self.signal_name} fraction')
         ax.set_xlabel('Noise fraction')
 
 
         ax=axes[0][1]
         df.plot(x='n_noise', y='n_sig', lw=0.5,  ax=ax)
         df.plot.scatter(x='n_noise', y='n_sig', c='threshold',  cmap=cmap, ax=ax)
-        ax.set_ylabel(f'{self.sig_label} counts')
+        ax.set_ylabel(f'{self.signal_name} counts')
         ax.set_xlabel('Noise counts')
 
         ax=axes[0][2]
         df.plot(x='rate_noise', y='rate_sig', lw=0.5,  ax=ax)
         df.plot.scatter(x='rate_noise', y='rate_sig', c="threshold", cmap=cmap, ax=ax)
-        ax.set_ylabel(f'{self.sig_label} rate [Hz]')
+        ax.set_ylabel(f'{self.signal_name} rate [Hz]')
         ax.set_xlabel('Noise rate [Hz]')
         
         ax=axes[1][0]
@@ -622,3 +707,4 @@ class TPSignalNoiseAnalyzer:
 
         fig.tight_layout()
         return fig
+    
