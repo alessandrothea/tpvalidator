@@ -153,20 +153,6 @@ class TPSignalNoisePreSelection:
         self.noise_view_1 = self.all_view_1.query('bt_is_signal == 0')
         self.noise_view_2 = self.all_view_2.query('bt_is_signal == 0')
         
-        # TODO: remove
-        # legacy aliases
-        self.p0 = self.all_view_0
-        self.p1 = self.all_view_1
-        self.p2 = self.all_view_2
-
-        self.sig_p0 = self.sig_view_0
-        self.sig_p1 = self.sig_view_1
-        self.sig_p2 = self.sig_view_2
-
-        self.noise_p0 = self.noise_view_0
-        self.noise_p1 = self.noise_view_1
-        self.noise_p2 = self.noise_view_2
-
         self.all_by_view = {
             0 : self.all_view_0,
             1 : self.all_view_1,
@@ -186,6 +172,19 @@ class TPSignalNoisePreSelection:
         }  
 
 
+        # TODO: remove
+        # legacy aliases
+        self.p0 = self.all_view_0
+        self.p1 = self.all_view_1
+        self.p2 = self.all_view_2
+
+        self.sig_p0 = self.sig_view_0
+        self.sig_p1 = self.sig_view_1
+        self.sig_p2 = self.sig_view_2
+
+        self.noise_p0 = self.noise_view_0
+        self.noise_p1 = self.noise_view_1
+        self.noise_p2 = self.noise_view_2
 
     def __len__(self) -> int:
         return len(self.all)
@@ -625,8 +624,10 @@ class TPSignalNoiseAnalyzer:
         
         tps=self.tps
 
-        df_sig = getattr(tps, f'sig_p{plane_id:d}')
-        df_noise = getattr(tps, f'noise_p{plane_id:d}')
+        # df_sig = getattr(tps, f'sig_p{plane_id:d}')
+        # df_noise = getattr(tps, f'noise_p{plane_id:d}')
+        df_sig = tps.sig_by_view[plane_id]
+        df_noise = tps.noise_by_view[plane_id]
 
         df_sig_seq = [df_sig.query(f"{var} > {t}") for t in values]
         df_noise_seq = [df_noise.query(f"{var} > {t}") for t in values]

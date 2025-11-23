@@ -294,8 +294,7 @@ class TriggerPrimitivesWorkspace:
                 if obj_name.startswith('ADCsPlane') or obj_name.startswith('ADCsNoisePlane'):
                     self.rawdigits_hists[obj_name.split(';')[0]] = f[k.split(';')[0]]
 
-    
-        self._load_rawdigis_events();
+        self._load_rawdigis_event_list();
 
 
     def get_waveforms(self, ev: int) -> pd.DataFrame:
@@ -309,17 +308,97 @@ class TriggerPrimitivesWorkspace:
             if not df_wf is None:
                 return df_wf
             
-            df_wf = self._load_sparse_waveform_data(ev)
+            if ( self._find_rawdigit_tree_active_channels_branch() ):
+                df_wf = self._load_sparse_waveform_data(ev)
+            else:
+                df_wf = self._load_waveform_data(ev)
+
             self._waveforms[ev] = df_wf
 
             return self._waveforms[ev]
 
 
-    def _load_rawdigis_events( self ):
+    def _load_rawdigis_event_list( self ):
         self._log.info("Load rawdigis event list")
         self.rawdigis_events = self._events(self.rawdigits_tree)
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
+
+    def _load_waveform_data(self, ev_sel: Union[int, list] = 1):
+        """
+        Load waveform data for specified channels from a ROOT file into a pandas DataFrame.
+
+        Args:
+
+        Returns:
+            pd.DataFrame or None: DataFrame containing the waveform data for the specified channels, or None on error.
+        """
+        try:
+            with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
+
+                branches = ["event", "run", "subrun"]
+                
+                df_evs = tree.arrays(branches, library='pd')
+                print(df_evs.event.values)
+                print(ev_sel)
+
+                if not (type(ev_sel) == int and ev_sel == 1):
+                    raise RuntimeError("Only the loading of the first event is supported")
+                
+                ev_num = df_evs.event[0]
+                chans = [ o.name for o in tree.branches if o.name not in ['event','run', 'subrun']]
+                self._log.debug(f"found {len(chans)} channels")
+
+                self._log.debug("Loading tree into np arrays")
+                # arrays = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans], library='np')
+                arrays = tree.arrays( library='np')
+                self._log.debug("Done loading tree into np arrays")
+
+                self._log.debug("Converting np arrays to dataframe")
+                df = pd.DataFrame(arrays)
+                self._log.debug("Done converting np arrays to dataframe")
+
+                df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
+
+                self._log.debug("Expanding waveforms")
+                df_waveforms = df.explode(chans)
+                self._log.debug("Done expanding waveforms")
+
+                # FIXME: this causes a fragmentation warning
+                # Try: new_cols = {c: df[c].astype("uint16") for c in chans}
+                # df = df.assign(**new_cols)  # single, consolidated assignment
+                df_waveforms = df_waveforms.astype({c:'uint16' for c in chans})
+                df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
+
+                return df_waveforms
+                
+            # branch_names = [f"{ch:d}" for ch in channel_ids ]
+            # with uproot.open(f'{filepath}:{tree_name}') as tree:
+            #     arrays = tree.arrays(branch_names, library="ak", entry_stop=max_events)
+            #     df = ak.to_dataframe(arrays)
+            #     df.columns = [int(c) for c in df.columns]
+            #     df.index = np.arange(0, len(df))
+            #     return df
+            
+        except Exception as e:
+            print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
+            return None
+
+
+    def _find_rawdigit_tree_active_channels_branch(self):
+
+        try:
+            with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
+
+                branch_names = tree.keys()
+                
+                for name in ['active_channels', 'chans_with_electrons']:
+                    if name in branch_names:
+                        return name
+                return None
+        except Exception as e:
+            print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
+            return None
 
     def _load_sparse_waveform_data(self, ev_sel: Union[int, list] = 1):
         """Loads sparse rawdigits waveforms for a specific event from a ROOT file.
@@ -334,19 +413,12 @@ class TriggerPrimitivesWorkspace:
 
         """
 
-        def find_active_channels_branch(tree):
 
-            branch_names = tree.keys()
-            
-            for name in ['active_channels', 'chans_with_electrons']:
-                if name in branch_names:
-                    return name
-            return None
 
         try:
             with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
 
-                activ_chans_branch = find_active_channels_branch(tree)
+                activ_chans_branch = self._find_rawdigit_tree_active_channels_branch(tree)
                 if activ_chans_branch is None:
                     raise RuntimeError(f"Active channel branch not found in tree. This doesn't look like a sparse waveform tree")
                 branches = ["event", "run", "subrun"]+[activ_chans_branch]
@@ -368,8 +440,9 @@ class TriggerPrimitivesWorkspace:
                 ev_num = df_evs.event[0]
 
 
-                # extract the list of channels with stingal from the 'chans_with_electrons' branch
+                # extract the list of channels with signal from the 'chans_with_electrons' branch
                 chans = ([ c for c in df_evs[df_evs.event == ev_num][activ_chans_branch][0]])
+                
                 # arrays = tree.arrays(["event", "run", "subrun"]+[str(c) for c in chans])
                 # df_waveforms = ak.to_dataframe(arrays)
                 # df_waveforms.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df_waveforms.columns]
