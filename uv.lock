@@ -469,6 +469,15 @@ wheels = [
 ]
 
 [[package]]
+name = "hepunits"
+version = "2.4.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/a2/a952cf06f9a0ecbd79c603953d6c8d768dafcccd7eff1af3e9c38f22bc77/hepunits-2.4.3.tar.gz", hash = "sha256:9f06591d7c6384d9c20d61d74e8767fe16650298c8e97434162d9190d366a878", size = 16285, upload-time = "2025-11-06T15:23:35.298Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/ca/73274d6f0b54299f3a3d6ec6329c7cb84d260918e88a6e0971f710973a08/hepunits-2.4.3-py3-none-any.whl", hash = "sha256:1a1b746a9193aae8e6bbfcac9572e0c67b9de701b510cdfe079a0dae03140ae1", size = 17073, upload-time = "2025-11-06T15:23:33.918Z" },
+]
+
+[[package]]
 name = "hist"
 version = "2.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -998,6 +1007,19 @@ wheels = [
 ]
 
 [[package]]
+name = "particle"
+version = "0.26.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "hepunits" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/e7/af359b9dad71d313b68b2bc53453c7e94ae3f08f34d68def46e6d58c4fab/particle-0.26.0.tar.gz", hash = "sha256:11c869465f5467efb975dcc77e2327e2c4e3691de755ebcf853f504b2974ba16", size = 328302, upload-time = "2025-09-30T13:27:58.906Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/d9/e57e826df17608a40d5d3d2878d405cd773218853686329a7bea9dcbbb57/particle-0.26.0-py3-none-any.whl", hash = "sha256:231c17d76c3b21b4a2c26303e7b6e59f60ae7ebff813c6e8330ac3b61689807f", size = 307980, upload-time = "2025-09-30T13:27:56.949Z" },
+]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1481,6 +1503,7 @@ dependencies = [
     { name = "nbformat" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "particle" },
     { name = "plotly" },
     { name = "rich" },
     { name = "scipy" },
@@ -1513,6 +1536,7 @@ requires-dist = [
     { name = "nbformat", specifier = ">=5.10.4" },
     { name = "numpy", specifier = ">=2.3.4" },
     { name = "pandas", specifier = ">=2.2.3" },
+    { name = "particle", specifier = ">=0.26.0" },
     { name = "plotly", specifier = ">=6.1.2" },
     { name = "rich", specifier = ">=14.1.0" },
     { name = "scipy", specifier = ">=1.16.0" },

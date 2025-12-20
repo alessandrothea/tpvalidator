@@ -38,11 +38,11 @@ log_prep = logging.getLogger('prepare_figures')
 def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) -> dict:
 
     # Analyze the entire dataset
-    all_tps = snn.TPSignalNoisePreSelection(ws.tps)
+    all_tps = snn.TPSignalNoiseSelector(ws.tps)
     alltp_ana = snn.TPSignalNoiseAnalyzer(all_tps, sig_label='Rads')
 
     # create analyzers
-    tps = snn.TPSignalNoisePreSelection(ws.tps[(ws.tps.TP_startT >100) & (ws.tps.TP_startT <8100)])
+    tps = snn.TPSignalNoiseSelector(ws.tps[(ws.tps.TP_startT >100) & (ws.tps.TP_startT <8100)])
     tp_ana = snn.TPSignalNoiseAnalyzer(tps, sig_label='Rads')
 
 

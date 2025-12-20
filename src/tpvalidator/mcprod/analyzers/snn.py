@@ -136,7 +136,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     fig.tight_layout()
     return fig
 
-class TPSignalNoisePreSelection:
+class TPSignalNoiseSelector:
     def __init__(self, tps):
 
         self.all = tps
@@ -190,19 +190,17 @@ class TPSignalNoisePreSelection:
         return len(self.all)
     
     def query(self, query: str):
-        return TPSignalNoisePreSelection(self.all.query(query))
+        return TPSignalNoiseSelector(self.all.query(query))
         
 
 class TPSignalNoiseAnalyzer:
 
     def __init__(self, 
-                 tp_selection: TPSignalNoisePreSelection, 
-                 signal_name: str ='signal',
-                 readout_window: int=None,
+                 tp_selection: TPSignalNoiseSelector, 
+                 signal_name: str ='Signal'
                  ):
         self.tps = tp_selection
         self.signal_name = signal_name
-        self.readout_window = readout_window
 
     def draw_tp_sig_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
         fig,axes= plt.subplots(3,3, figsize=figsize)
@@ -341,7 +339,7 @@ class TPSignalNoiseAnalyzer:
 
         cmap = plt.get_cmap('tab10')
 
-        # all_tps_ev10 = snn.TPSignalNoisePreSelection(ws.tps[ws.tps.event == 10])
+        # all_tps_ev10 = snn.TPSignalNoiseSelector(ws.tps[ws.tps.event == 10])
 
         # fig, axes = plt.subplots(2,2, figsize=(10,8), sharex=True, sharey=True)
         xlabel = 'channel'
@@ -635,8 +633,8 @@ class TPSignalNoiseAnalyzer:
 
         n_sig_tps = [len(df) for df in df_sig_seq]
         n_noise_tps = [len(df) for df in df_noise_seq]
-        rate_sig_tps = [df_to_tp_rates(df, self.readout_window) for df in df_sig_seq]
-        rate_noise_tps = [df_to_tp_rates(df, self.readout_window) for df in df_noise_seq]
+        rate_sig_tps = [df_to_tp_rates(df) for df in df_sig_seq]
+        rate_noise_tps = [df_to_tp_rates(df) for df in df_noise_seq]
 
 
         df = pd.DataFrame({

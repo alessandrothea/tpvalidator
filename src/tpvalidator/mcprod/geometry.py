@@ -22,7 +22,15 @@ class FDVDGeometry_1x6x8:
     crp_view_2_num_chans_sim: int = 1168
 
     num_crps: int = 12
+    
+    tpc_tot_num_chans_sim: int = 864
+    tpc_view_0_num_chans_sim: int = 286 
+    tpc_view_1_num_chans_sim: int = 286
+    tpc_view_2_num_chans_sim: int = 292
+    
     num_tpc: int = num_crps*4
+
+
 
     @classmethod
     def crp_num_chans_by_view_sim(cls, ro_view: int) -> int:
@@ -34,5 +42,18 @@ class FDVDGeometry_1x6x8:
                 return cls.crp_view_1_num_chans_sim
             case 2:
                 return cls.crp_view_2_num_chans_sim
+            case _:
+                raise KeyError(f"No {ro_view} readout view")
+
+    @classmethod
+    def tpc_num_chans_by_view_sim(cls, ro_view: int) -> int:
+
+        match ro_view:
+            case 0:
+                return cls.tpc_view_0_num_chans_sim
+            case 1:
+                return cls.tpc_view_1_num_chans_sim
+            case 2:
+                return cls.tpc_view_2_num_chans_sim
             case _:
                 raise KeyError(f"No {ro_view} readout view")

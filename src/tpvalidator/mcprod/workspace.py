@@ -8,13 +8,26 @@ import numpy as np
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
 
+class TPDataFrame(pd.DataFrame):
+    # normal properties
+    _metadata = ["prod_info", 'extra_info']
+
+    @property
+    def _constructor(self):
+        return TPDataFrame
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.prod_info = {}
+        self.extra_info = {}
+
 class TriggerPrimitivesWorkspace:
     
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
 
 
     # TODO: add arguments to disable truth info loading
-    def __init__(self, data_path: str, first_entry: int=0, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives'):
+    def __init__(self, data_path: str, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
 
         # Labels and ROOT object paths
         self._analyzer_name = analyzer_name
@@ -31,6 +44,8 @@ class TriggerPrimitivesWorkspace:
         self._first_entry = first_entry
         self._last_entry = last_entry
 
+        self._extra_info = extra_info
+
         # Dataframes
         self._event_summary = None
         self._mctruths = None
@@ -43,14 +58,17 @@ class TriggerPrimitivesWorkspace:
         self.rawdigis_events = []
         self._waveforms = {}
 
-        self.tp_maker_name = None
+        # Ancillary information
+        self._event_list = None
         self._mctruth_blocks = None
 
+        # Initialize trees
         self._do_init(tps_key)
 
-        # save name of the tpmaker
-        self.tp_maker_name = self._tps_tree_name.replace('_',':')
-
+        self._extra_info.update({
+            'num_events': self.num_events,
+            'event_list': self.event_list,
+        })
 
 
     #
@@ -144,8 +162,10 @@ class TriggerPrimitivesWorkspace:
     def _read_infos(self, tfile, info_path) -> Dict:
         named_info  = tfile[info_path]
         return json.loads(named_info.members['fTitle'])
+    
 
-    def _events(self, tree):
+    @staticmethod
+    def _get_event_id_list(tree):
         return tree.arrays(['event'], library='pd').event.unique()
 
     
@@ -161,15 +181,20 @@ class TriggerPrimitivesWorkspace:
         tree = getattr(self, f'{df_id}_tree')
         ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
         self._log.debug(f"Applying event cut to {df_id}")
-        return tree.arrays(library="pd", cut=ev_cut)
+        df = TPDataFrame(tree.arrays(library="pd", cut=ev_cut))
+        df.prod_info = self.info
+        df.extra_info = self._extra_info
+        return df
+
 
     # FIXME:
-    def _decorate_tps(self):
+    def _decorate_tps_dataframe(self):
         """Decorate TPS dataframe with extra columns useful for analysis
 
         - time_peak: time of the TP peak in DTS units
         - samples_start: the TP start time in sample unites
         - samples_peak: the TP peak time in samples unit
+        - bt_is_signal: true if the tp was backtracked to a signal
 
         """
         self.tps['time_peak'] = self.tps.time_start+self.tps.samples_over_threshold*32
@@ -188,7 +213,7 @@ class TriggerPrimitivesWorkspace:
             str: query selection string
         """
 
-        ev_list = self._events(tree)
+        ev_list = self._get_event_id_list(tree)
 
         cuts = []
         if not self._first_entry is None:
@@ -200,6 +225,11 @@ class TriggerPrimitivesWorkspace:
 
         event_cut =  ' & '.join(cuts) if len(cuts) > 0 else None
         return event_cut
+
+    @property
+    def tp_maker_name(self):
+        return self._tps_tree_name.replace('_',':')
+        
 
     # tree getters
     @property
@@ -244,7 +274,7 @@ class TriggerPrimitivesWorkspace:
         if self._tps is None:
             self._log.debug("Loading tps dataset")
             self._tps = self._load_dataframe_with_event_cut('tps')
-            self._decorate_tps()
+            self._decorate_tps_dataframe()
         return self._tps
     
 
@@ -254,7 +284,7 @@ class TriggerPrimitivesWorkspace:
             self._mctruth_blocks = dict(
                 self.mctruths[["block_id", "generator_name"]].drop_duplicates().values
             )
-        return self._mctruth_block
+        return self._mctruth_blocks
     
     #
     # Workspace properties
@@ -266,10 +296,19 @@ class TriggerPrimitivesWorkspace:
         Returns:
             int: number of events in the workspace
         """
-        return len(self.event_summary.groupby(by=['event', 'run', 'subrun']))
+        return len(self.event_list)
+        
+    @property
+    def event_list(self) -> pd.DataFrame:
+        if self._event_list is None:
+            ev_cut = self.get_event_selection_str(self.event_summary_tree) if self.event_summary_tree.num_entries > 0 else None
+            print(ev_cut)
+            self._event_list = self.event_summary_tree.arrays(['event', 'run', 'subrun'], cut=ev_cut, library='pd')
+        return self._event_list
 
 
-    #
+
+    #----------------------------------------------------------------------------------------------------------
     # Support for raw dataforms loading
     #
     def add_rawdigits(self, data_path: str):
@@ -320,7 +359,7 @@ class TriggerPrimitivesWorkspace:
 
     def _load_rawdigis_event_list( self ):
         self._log.info("Load rawdigis event list")
-        self.rawdigis_events = self._events(self.rawdigits_tree)
+        self.rawdigis_events = self._get_event_id_list(self.rawdigits_tree)
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
 
@@ -412,15 +451,14 @@ class TriggerPrimitivesWorkspace:
             pd.DataFrame or None: DataFrame containing the waveforms for the specified event, or None if not found or on error.
 
         """
-
-
+        activ_chans_branch = self._find_rawdigit_tree_active_channels_branch()
+        if activ_chans_branch is None:
+            raise RuntimeError(f"Active channel branch not found in tree. This doesn't look like a sparse waveform tree")
 
         try:
             with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
 
-                activ_chans_branch = self._find_rawdigit_tree_active_channels_branch(tree)
-                if activ_chans_branch is None:
-                    raise RuntimeError(f"Active channel branch not found in tree. This doesn't look like a sparse waveform tree")
+
                 branches = ["event", "run", "subrun"]+[activ_chans_branch]
                 
                 df_evs = tree.arrays(branches, library='pd')
@@ -475,3 +513,6 @@ class TriggerPrimitivesWorkspace:
         except Exception as e:
             print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
             return None
+        
+
+

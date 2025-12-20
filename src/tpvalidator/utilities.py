@@ -246,7 +246,7 @@ def subplot_autogrid(n_plots, **kwargs):
 ###
 
 
-def df_to_tp_rates(df_tp: pd.DataFrame, drift_window: int = None) -> float:
+def df_to_tp_rates(df_tp: pd.DataFrame, readout_window: int = None) -> float:
     
     """
     Calculates the TP rates from the TP dataframe
@@ -257,19 +257,16 @@ def df_to_tp_rates(df_tp: pd.DataFrame, drift_window: int = None) -> float:
 
     
     sampling_time = 0.5e-6 # Sampling time 1/2 usec
+    readout_window = df_tp.extra_info['readout_window'] if readout_window is None else readout_window
 
-    if (drift_window is None):
-        drift_window = (df_tp.groupby('event').sample_start.max()-df_tp.groupby('event').sample_start.min()).max()
-        # print(f"Est drift win {drift_window}")
-
-    tot_time = drift_window*sampling_time*len(df_tp.event.unique())
+    tot_time = readout_window*sampling_time*len(df_tp.event.unique())
     
     n_tps = len(df_tp)
 
     rate =  n_tps/(tot_time) if tot_time > 0 else 0
 
-    # print(f"Integrated number of samples in the dataset (over all events): {drift_window}")
-    # print(f"Integrated simulated time: {drift_window*sampling_time:.3f} s")
+    # print(f"Integrated number of samples in the dataset (over all events): {readout_window}")
+    # print(f"Integrated simulated time: {readout_window*sampling_time:.3f} s")
 
     # print(f"Integrated number of TPs: {n_tps}")
     # print(f"Rate: {rate/1e6:.3f} MHz")

@@ -136,7 +136,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     fig.tight_layout()
     return fig
 
-class TPSignalNoisePreSelection:
+class TPSignalNoiseSelector:
     def __init__(self, tps, ):
 
         self.all = tps
@@ -159,12 +159,12 @@ class TPSignalNoisePreSelection:
         return len(self.all)
     
     def query(self, query: str):
-        return TPSignalNoisePreSelection(self.all.query(query))
+        return TPSignalNoiseSelector(self.all.query(query))
         
 
 class TPSignalNoiseAnalyzer:
 
-    def __init__(self, tp_selection: TPSignalNoisePreSelection, sig_label='Signal'):
+    def __init__(self, tp_selection: TPSignalNoiseSelector, sig_label='Signal'):
         self.tps = tp_selection
         self.sig_label = sig_label
 
@@ -293,7 +293,7 @@ class TPSignalNoiseAnalyzer:
 
         cmap = plt.get_cmap('tab10')
 
-        # all_tps_ev10 = snn.TPSignalNoisePreSelection(ws.tps[ws.tps.event == 10])
+        # all_tps_ev10 = snn.TPSignalNoiseSelector(ws.tps[ws.tps.event == 10])
 
         # fig, axes = plt.subplots(2,2, figsize=(10,8), sharex=True, sharey=True)
         xlabel = 'channel'

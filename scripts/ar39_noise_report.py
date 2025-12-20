@@ -39,11 +39,11 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
     print("Generate figures")
 
     # Analyze the entire dataset
-    all_tps = snn.TPSignalNoisePreSelection(ws.tps)
+    all_tps = snn.TPSignalNoiseSelector(ws.tps)
     alltp_ana = snn.TPSignalNoiseAnalyzer(all_tps, sig_label='Ar39')
 
     # create analyzers
-    tps = snn.TPSignalNoisePreSelection(ws.tps[(ws.tps.sample_start >100) & (ws.tps.sample_start <8100)])
+    tps = snn.TPSignalNoiseSelector(ws.tps[(ws.tps.sample_start >100) & (ws.tps.sample_start <8100)])
     tp_ana = snn.TPSignalNoiseAnalyzer(tps, sig_label='Ar39')
 
     pf = Portfolio(output_dir, 'ar39')
