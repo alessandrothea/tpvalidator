@@ -12,7 +12,7 @@ import pandas as pd
 import cmocean.cm as cmo
 
 
-from ...histograms import uproot_hist_mean_std, calculate_natural_bins
+from ...histograms import hist_mean_std, calculate_natural_bins
 from ..workspace import TriggerPrimitivesWorkspace
 from ...utilities import subplot_autogrid, df_to_tp_rates
 
@@ -42,7 +42,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
-    mu, sigma = uproot_hist_mean_std(adc_hists['ADCsNoisePlaneU'])[0]
+    mu, sigma = hist_mean_std(adc_hists['ADCsNoisePlaneU'])[0]
     ax.set_xlim(mu-view_range*sigma, mu+view_range*sigma)
     thrs_3s=mu+3*sigma
     thrs_5s=mu+5*sigma
@@ -73,7 +73,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
-    mu, sigma = uproot_hist_mean_std(adc_hists['ADCsNoisePlaneV'])[0]
+    mu, sigma = hist_mean_std(adc_hists['ADCsNoisePlaneV'])[0]
     ax.set_xlim(mu-view_range*sigma, mu+view_range*sigma)
     thrs_3s=mu+3*sigma
     thrs_5s=mu+5*sigma
@@ -105,7 +105,7 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
-    mu, sigma = uproot_hist_mean_std(adc_hists['ADCsNoisePlaneX'])[0]
+    mu, sigma = hist_mean_std(adc_hists['ADCsNoisePlaneX'])[0]
     ax.set_xlim(mu-view_range*sigma, mu+view_range*sigma)
     thrs_3s=mu+3*sigma
     thrs_5s=mu+5*sigma

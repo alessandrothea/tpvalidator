@@ -302,7 +302,7 @@ class TriggerPrimitivesWorkspace:
     def event_list(self) -> pd.DataFrame:
         if self._event_list is None:
             ev_cut = self.get_event_selection_str(self.event_summary_tree) if self.event_summary_tree.num_entries > 0 else None
-            print(ev_cut)
+            self._log.debug(f"Event cut : {ev_cut}")
             self._event_list = self.event_summary_tree.arrays(['event', 'run', 'subrun'], cut=ev_cut, library='pd')
         return self._event_list
 
@@ -378,8 +378,8 @@ class TriggerPrimitivesWorkspace:
                 branches = ["event", "run", "subrun"]
                 
                 df_evs = tree.arrays(branches, library='pd')
-                print(df_evs.event.values)
-                print(ev_sel)
+                # print(df_evs.event.values)
+                # print(ev_sel)
 
                 if not (type(ev_sel) == int and ev_sel == 1):
                     raise RuntimeError("Only the loading of the first event is supported")
@@ -463,8 +463,8 @@ class TriggerPrimitivesWorkspace:
                 
                 df_evs = tree.arrays(branches, library='pd')
 
-                print(df_evs.event.values)
-                print(ev_sel)
+                # print(df_evs.event.values)
+                # print(ev_sel)
 
                 if not (type(ev_sel) == int and ev_sel == 1):
                     raise RuntimeError("Only the loading of the first event is supported")
@@ -504,8 +504,9 @@ class TriggerPrimitivesWorkspace:
                 self._log.debug("Done expanding waveforms")
 
                 # FIXME: this causes a fragmentation warning
-                # Try: new_cols = {c: df[c].astype("uint16") for c in chans}
-                # df = df.assign(**new_cols)  # single, consolidated assignment
+                # Try: 
+                # new_cols = {c: df_waveforms[c].astype("uint16") for c in chans}
+                # df_waveforms = df_waveforms.assign(**new_cols)  # single, consolidated assignment
                 df_waveforms = df_waveforms.astype({c:'uint16' for c in chans})
                 df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
 

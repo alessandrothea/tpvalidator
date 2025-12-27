@@ -14,8 +14,7 @@ import tpvalidator.analyzers.snn as snn
 
 from rich import print
 from rich.logging import RichHandler
-from tpvalidator.utilities import temporary_log_level, subplot_autogrid
-from tpvalidator.histograms import uproot_hist_mean_std
+from tpvalidator.utilities import temporary_log_level
 from io import BytesIO
 
 
