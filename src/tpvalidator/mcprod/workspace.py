@@ -44,7 +44,8 @@ class TriggerPrimitivesWorkspace:
         self._first_entry = first_entry
         self._last_entry = last_entry
 
-        self._extra_info = extra_info
+        # Don't forget to copy!
+        self._extra_info = extra_info.copy()
 
         # Dataframes
         self._event_summary = None
@@ -194,14 +195,13 @@ class TriggerPrimitivesWorkspace:
         - time_peak: time of the TP peak in DTS units
         - samples_start: the TP start time in sample unites
         - samples_peak: the TP peak time in samples unit
-        - bt_is_signal: true if the tp was backtracked to a signal
+        - bt_is_signal: 1 if the tp was backtracked to a signal
 
         """
         self.tps['time_peak'] = self.tps.time_start+self.tps.samples_over_threshold*32
         self.tps['sample_start'] = self.tps.time_start//32
         self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_over_threshold
-        self.tps['bt_is_signal'] = self.tps.bt_numelectrons > 0
-
+        self.tps['bt_is_signal'] = (self.tps.bt_numelectrons > 0).astype(np.int8)
 
     def get_event_selection_str(self, tree) -> str:
         """Returns the event selection string based on the first/last entry fields
@@ -378,8 +378,6 @@ class TriggerPrimitivesWorkspace:
                 branches = ["event", "run", "subrun"]
                 
                 df_evs = tree.arrays(branches, library='pd')
-                # print(df_evs.event.values)
-                # print(ev_sel)
 
                 if not (type(ev_sel) == int and ev_sel == 1):
                     raise RuntimeError("Only the loading of the first event is supported")
@@ -462,9 +460,6 @@ class TriggerPrimitivesWorkspace:
                 branches = ["event", "run", "subrun"]+[activ_chans_branch]
                 
                 df_evs = tree.arrays(branches, library='pd')
-
-                # print(df_evs.event.values)
-                # print(ev_sel)
 
                 if not (type(ev_sel) == int and ev_sel == 1):
                     raise RuntimeError("Only the loading of the first event is supported")
