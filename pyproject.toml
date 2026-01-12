@@ -37,7 +37,7 @@ dependencies = [
 [project.scripts]
 tpvalidator = "tpvalidator:main"
 tp-basic-checks = "tpvalidator.basic:main"
-tp-comparison = "tpvalidator.comparison:main"
+ta-finder = "tpvalidator.cli.tafind:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -50,3 +50,4 @@ package = true
 dev = [
     "pytest>=8.4.1",
 ]
+
