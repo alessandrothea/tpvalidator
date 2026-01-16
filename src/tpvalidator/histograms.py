@@ -11,7 +11,7 @@ type Hist1D = hist.Hist | bh.Histogram
 type Quantiles = float | Sequence[float]
 
 
-def hist_compute_ratio(
+def compute_rati_hist(
     numerator_data: Union[np.ndarray, Sequence[float]],
     denominator_data: Union[np.ndarray, Sequence[float]],
     bins: Union[int, Sequence[float]] = 50,
@@ -321,9 +321,10 @@ def hist_and_sum(
     if isinstance(bins, int):
         xmin = df[cols].min().min()
         xmax = df[cols].max().max()
-        axis = hist.Regular(bins, xmin, xmax, name="x")
+        axis = hist.axis.Regular(bins, xmin, xmax, name="x")
     else:
-        axis =hist.Regular.from_edges(bins, name="x")
+        # FIXME:
+        axis =hist.axis.Regular.from_edges(bins, name="x")
 
     # --- Build one histogram per column -------------------------------------
     histograms = {}

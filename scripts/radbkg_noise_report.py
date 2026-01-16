@@ -8,7 +8,7 @@ import mistletoe as mt
 import uproot
 import textwrap
 import logging
-import tpvalidator.workspace as workspace
+import tpvalidator.archive.workspace as workspace
 import tpvalidator.utilities as utils
 import tpvalidator.analyzers.snn as snn
 

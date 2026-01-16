@@ -28,7 +28,7 @@ class FDVDGeometry_1x6x8:
     tpc_view_1_num_chans_sim: int = 286
     tpc_view_2_num_chans_sim: int = 292
     
-    num_tpc: int = num_crps*4
+    num_tpcs: int = num_crps*4
 
 
 
