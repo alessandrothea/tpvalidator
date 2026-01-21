@@ -8,13 +8,13 @@ import numpy as np
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
 
-class TPDataFrame(pd.DataFrame):
+class TrgDataFrame(pd.DataFrame):
     # normal properties
     _metadata = ["prod_info", 'extra_info']
 
     @property
     def _constructor(self):
-        return TPDataFrame
+        return TrgDataFrame
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -33,11 +33,14 @@ class TriggerPrimitivesWorkspace:
         self._analyzer_name = analyzer_name
         self._tps_folder  = tps_folder
         self._info_name = f'{self._analyzer_name}/info'
+
+        # Standard trees
         self._event_summary_tree_name = f'{self._analyzer_name}/event_summary'
         self._mctruths_tree_name = f'{self._analyzer_name}/mctruths'
         self._mcneutrinos_tree_name = f'{self._analyzer_name}/mcneutrinos'
         self._mcparticles_tree_name = f'{self._analyzer_name}/mcparticles'
         self._ides_tree_name = f'{self._analyzer_name}/simides'
+        
         self._rawdigits_tree_name: str = 'triggerana/rawdigis_tree'
 
         self._data_path = data_path
@@ -86,6 +89,7 @@ class TriggerPrimitivesWorkspace:
             self._log.debug(f.keys())
             self._log.info("Adding processing info")
             self.info = self._read_infos(f, self._info_name) 
+
 
             # Try loading the MCTruth tree
             self._log.info("Adding Event Summary data")
@@ -182,7 +186,7 @@ class TriggerPrimitivesWorkspace:
         tree = getattr(self, f'{df_id}_tree')
         ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
         self._log.debug(f"Applying event cut to {df_id}")
-        df = TPDataFrame(tree.arrays(library="pd", cut=ev_cut))
+        df = TrgDataFrame(tree.arrays(library="np", cut=ev_cut))
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df

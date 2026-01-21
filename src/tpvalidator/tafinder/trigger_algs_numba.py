@@ -87,16 +87,18 @@ def apply_dbscan(window_tps, epsilon=2, min_samples=2):
 
     valid = labels != -1
     if not np.any(valid):
-        # return (0, 0, 0, 0), df_index, labels
         return pd.Series({
             "n_clusters": 0,
             "mean_cluster_sadc": 0,
             "total_cluster_sadc": 0,
             "max_cluster_sadc": 0,
+            "tp_index": [],
+            "dbscan_label": []
         })
 
     cluster_ids = np.unique(labels[valid])
-    cluster_sums = np.array([adc[labels == cid].sum() for cid in cluster_ids])
+    clusters = [adc[labels == cid] for cid in cluster_ids]
+    cluster_sums = np.array([c.sum() for c in clusters])
 
     summary=(
         len(cluster_ids),
@@ -109,129 +111,10 @@ def apply_dbscan(window_tps, epsilon=2, min_samples=2):
 
 
     return pd.Series({
-        "n_clusters": summary[0],
-        "mean_cluster_sadc": summary[1],
-        "total_cluster_sadc": summary[2],
-        "max_cluster_sadc": summary[3],
+        "n_clusters": len(cluster_ids),
+        "mean_cluster_sadc": cluster_sums.mean(),
+        "total_cluster_sadc": cluster_sums.sum(),
+        "max_cluster_sadc": cluster_sums.max(),
+        "tp_index": df_index,
+        "dbscan_label": list(labels)
     })
-
-
-#  TPC ID from TPCSet and readout_plane_id -->meant for collection only 
-def get_tpcid(apa_id, plane_id):
-    return apa_id * 2 + (plane_id - 2)
-
-#TP refinement 
-def apply_tp_filter(data, peak_adc_cut_=80, tot_cut_=8):
-    return data[(data.adc_peak > peak_adc_cut_) & (data.samples_over_threshold > tot_cut_)]
-
-#channel masking in z 
-def mask_edge_col_channels(data, edge_cut=80):
-    col_map = pd.DataFrame( np.loadtxt("./../YesOrNoTrigger/data/ViewChannelMatch_dunefd_1x2x6_full.txt", delimiter=','),columns=['col_ch','ind_ch','ind_plane','y','z'])
-
-    valid_channels = col_map[(col_map.z < col_map.z.max() - edge_cut) & (col_map.z > col_map.z.min() + edge_cut)].col_ch
-
-    return data[(data.readout_view == 2) & data.channel.isin(valid_channels)]
-
-
-
-# Main TAMaker code
-def TAMaker(data, 
-            mean_window_energy_from_bgd=5.1e3, bgd_sigma=3.3e3, add_backgrounds=False, #sim. background addition when running with signal only
-            window_size=1000, inspect_threshold=15e3, accept_threshold=55e3, #windowing + categorisation 
-            cluster_cut=22e3, db_epsilon=2, db_min_samples=2, #dbscan config
-            mask_channels=False, edge_cut=80, #channel masking in z
-            peakadc_cut=80, tot_cut=8, #tp refinement params 
-            n_threads=12, global_ta_offset=0, # global TA offset needed to get unique TA IDs for datasets with multiple subruns (repeated event IDs)
-            ): 
-
-    df = apply_tp_filter(data, peak_adc_cut_=peakadc_cut, tot_cut_=tot_cut)
-
-    if mask_channels:
-        df = mask_edge_col_channels(df, edge_cut=edge_cut)
-
-    df = df[df.readout_view == 2].copy()
-    df["time_start"] /= 32
-    df["tpc"] = get_tpcid(df.TPCSetID.to_numpy(), df.readout_plane_id.to_numpy())
-
-    bins = np.arange(0, 6000 + 1, window_size)
-    df["bin"] = np.digitize(df["time_start"], bins) - 1
-
-    window_summary = (df.groupby(["event", "tpc", "bin"]).agg(total_window_energy=("adc_integral", "sum"),TP_count=("adc_integral", "size")).reset_index())
-
-    #test : add  bgd. contribution to each window if the signal and bgd was not overlaid prior to generating TAs, this just makes sure some windows are randomly pushed over/under the trig. thresh. 
-    if add_backgrounds:
-        window_summary["total_window_energy"] += np.random.normal(mean_window_energy_from_bgd, bgd_sigma, size=len(window_summary))
-
-    window_summary["flag"] = 0
-    window_summary.loc[window_summary.total_window_energy > inspect_threshold, "flag"] = 1
-    window_summary.loc[window_summary.total_window_energy > accept_threshold, "flag"] = 2
-
-    window_summary = window_summary.sort_values(["event", "tpc", "bin"]).reset_index(drop=True)
-    window_summary["TA_id"] = np.arange(len(window_summary)) + global_ta_offset
-
-    # Immediate accept windows
-    results = []
-    immediate_accept = window_summary[window_summary.flag == 2]
-
-    for _, row in immediate_accept.iterrows():
-        results.append({
-            "event": row.event,
-            "tpc": row.tpc,
-            "window_start": row.bin * window_size,
-            "flag": row.flag,
-            "TA_id": row.TA_id,
-            "total_window_energy": row.total_window_energy,
-            "TP_count": row.TP_count,
-            "n_clusters": -1,
-            "mean_cluster_energy": -1,
-            "total_cluster_energy": -1,
-            "max_cluster_energy": -1
-        })
-
-    # DBSCAN for inspect windows
-    inspect_windows = window_summary[window_summary.flag == 1]
-    label_records = []
-
-    def process_window(row):
-        hits = df[(df.event == row.event) & (df.tpc == row.tpc) & (df.bin == row.bin)]
-        summary, idx, lbls = apply_dbscan(hits, epsilon=db_epsilon, min_samples=db_min_samples)
-        n_cl, mean_cl, tot_cl, max_cl = summary
-        flag = 2 if max_cl > cluster_cut else 0
-
-        return {
-            "summary": {
-                "event": row.event,
-                "tpc": row.tpc,
-                "window_start": row.bin * window_size,
-                "flag": flag,
-                "TA_id": row.TA_id,
-                "total_window_energy": row.total_window_energy,
-                "TP_count": row.TP_count,
-                "n_clusters": n_cl,
-                "mean_cluster_energy": mean_cl,
-                "total_cluster_energy": tot_cl,
-                "max_cluster_energy": max_cl
-            },
-            "tp_idx": idx,
-            "labels": lbls
-        }
-
-    with ThreadPoolExecutor(max_workers=n_threads) as ex:
-        futures = [ex.submit(process_window, row) for _, row in inspect_windows.iterrows()]
-        for f in tqdm(as_completed(futures), total=len(futures)):
-            out = f.result()
-            results.append(out["summary"])
-            label_records.append(pd.DataFrame({"index": out["tp_idx"], "dbscan_label": out["labels"]}))
-    tas = pd.DataFrame(results)
-
-    # Merging DBSCAN labels back into TP dataframe
-    df["dbscan_label"] = -1
-    if label_records:
-        all_labels = pd.concat(label_records, ignore_index=True).set_index("index")
-        df.loc[all_labels.index, "dbscan_label"] = all_labels["dbscan_label"]
-
-    df["window_start"] = df["bin"] * window_size
-
-    tps = df.merge(tas[["event", "tpc", "window_start", "TA_id"]],on=["event", "tpc", "window_start"],how="inner" )
-
-    return tas, tps
