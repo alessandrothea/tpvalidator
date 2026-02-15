@@ -1,6 +1,6 @@
 from rich import print
 import matplotlib
-from ..basic import BasicTPData
+from .basic import BasicTPData
 from ..utilities import subplot_autogrid
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches

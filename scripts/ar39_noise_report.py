@@ -22,7 +22,7 @@ from fpdf import FPDF, HTML2FPDF, FontFace, TextStyle, Align
 from pathlib import Path
 
 
-from tpvalidator.portfolio import ReportPDF, Portfolio
+from tpvalidator.reporting.portfolio import ReportPDF, Portfolio
 
 
 FORMAT = "%(message)s"

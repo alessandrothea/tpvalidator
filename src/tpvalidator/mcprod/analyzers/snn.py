@@ -205,43 +205,46 @@ class TPSignalNoiseAnalyzer:
     def draw_tp_sig_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
         fig,axes= plt.subplots(3,3, figsize=figsize)
 
+        alpha=0.01
+        col=None
+        cmap=None
         # XY row
         ax = axes[0][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane U [0]')
 
         ax = axes[0][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane V [1]')
 
         ax = axes[0][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane X [2]')
 
         # XZ row
         ax = axes[1][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p0.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane U [0]')
 
         ax = axes[1][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p1.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane V [1]')
 
         ax = axes[1][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p2.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane X [2]')
 
         # YZ row
         ax = axes[2][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha,c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane U [0]')
 
         ax = axes[2][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane V [1]')
 
         ax = axes[2][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=0.01, s=1, ax=ax)
+        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane X [2]')
 
         fig.suptitle(f"{signal_label} TP point of origin on XY, XZ and YZ planes")

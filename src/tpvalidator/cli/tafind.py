@@ -33,13 +33,14 @@ def test_writing(df: pd.DataFrame):
 
 @click.command()
 @click.argument('dataset-id')
-def main(dataset_id) -> int:
+@click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False))
+def main(dataset_id, outdir) -> int:
 
     dn=[dataset_id]
     # dn=['radbkg']
 
 
-    datasets = miniprod.load_mc_datasets(dn)
+    datasets = miniprod.load_tp_presel_datasets(dn)
 
     print(f"Loaded {len(datasets)} datasets")
 
@@ -47,18 +48,23 @@ def main(dataset_id) -> int:
 
     em_tps = ws.tps
 
-    # test_writing(em_tps)
 
     print("Processing tps")
-    df_writer = tpprocessor.RootDFWriter(f'{dataset_id}.root', 'taFinder')
-    # df_writer = None
+    df_writer = tpprocessor.RootDFWriter(outdir + f'/{dataset_id}.root', 'taFinder')
 
-    swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg={'ta_win_sadc_add_bkg': dataset_id != 'radbkg'})
+    taf_cfg = {
+        'ta_inspect_sadc_min': 11000,
+        'ta_win_sadc_add_bkg': dataset_id != 'radbkg',
+        'ta_win_sadc_dist_file': miniprod.radbkg_tawin_dist_file
+    }
+
+    swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)
 
 
     swtaf.process(em_tps)
 
-    df_writer.write(ws.mctruths, 'mctruths')
+    if ws.mctruths_tree:
+        df_writer.write(ws.mctruths, 'mctruths')
     df_writer.write(ws.event_summary, 'event_summary')
 
 

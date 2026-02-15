@@ -90,78 +90,55 @@ class TriggerPrimitivesWorkspace:
             self._log.info("Adding processing info")
             self.info = self._read_infos(f, self._info_name) 
 
+            tree_names = [
+                'event_summary',
+                'mctruths',
+                'mcneutrinos',
+                'mcparticles',
+                'ides'
+            ]
 
-            # Try loading the MCTruth tree
-            self._log.info("Adding Event Summary data")
-            try:
-                self.event_summary_tree = f[self._event_summary_tree_name]
-                self._log.info(f"{self._event_summary_tree_name} found with {self.event_summary_tree.num_entries} rows")
+            for t in tree_names:
+                self._log.info(f"Adding '{t}' data")
+                ttree_name = getattr(self, f'_{t}_tree_name')
 
-            except uproot.KeyInFileError:
-                self._log.warning(f"Key '{self._event_summary_tree_name}' not found in file.")
-                self._event_summary_tree = None
+                try:
+                    # Build tree name
+                    # Fetch the tree object
+                    ttree = f[ttree_name]
 
-            # Try loading the MCTruth tree
-            self._log.info("Adding MCTruth data")
-            try:
-                self.mctruths_tree = f[self._mctruths_tree_name]
-                self._log.info(f"{self._mctruths_tree_name} found with {self.mctruths_tree.num_entries} rows")
-
-            except uproot.KeyInFileError:
-                self._log.warning(f"Key '{self._mctruths_tree_name}' not found in file.")
-                self.mctruths_tree = None
-
-            # Try loading the MCTruth tree
-            self._log.info("Adding MCNeutrino data")
-            try:
-                self.mcneutrinos_tree = f[self._mcneutrinos_tree_name]
-                self._log.info(f"{self._mcneutrinos_tree_name} found with {self.mcneutrinos_tree.num_entries} rows")
-
-            except uproot.KeyInFileError:
-                self._log.warning(f"Key '{self._mcneutrinos_tree_name}' not found in file.")
-                self.mcneutrino_tree = None
-
-            # Try loading the MCTruth tree
-            self._log.info("Adding MCParticles data")
-            try:
-                self.mcparticles_tree = f[self._mcparticles_tree_name]
-                self._log.info(f"{self._mcparticles_tree_name} found with {self.mcparticles_tree.num_entries} rows")
-
-            except uproot.KeyInFileError:
-                self._log.warning(f"Key '{self._mcparticles_tree_name}' not found in file.")
-                self.mcparticles_tree = None
-
-
-            # Try loading the ides tree
-            self._log.info("Adding IDEs data")
-            try:
-                self.ides_tree = f[self._ides_tree_name]
-                self._log.info(f"{self._ides_tree_name} found with {self.ides_tree.num_entries} rows")
-
-            except uproot.KeyInFileError:
-                self._log.warning(f"Key '{self._ides_tree_name}' not found in file.")
-                self.ides_tree = None
+                    self._log.info(f"{ttree_name} found with {ttree.num_entries} rows")
+                except uproot.KeyInFileError:
+                    self._log.warning(f"Key '{ttree_name}' not found in file.")
+                    ttree = None
+                setattr(self, f'{t}_tree', ttree) 
 
 
             # Add trigger primitives
-            tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
-            if tps_key:
-                logging.info(f'Loading {tps_key}')
-                self.tps_tree = tp_trees_folder[tps_key]
-                self._tps_tree_name = tps_key
-            else:
 
-                match len(tp_trees_folder.keys(cycle=False)):
-                    case 0:
-                        self.tps_tree = None
-                    case 1:
-                        self._tps_tree_name = tp_trees_folder.keys(cycle=False)[0]
-                        logging.info(f'Loading {self._tps_tree_name}')
-                        self.tps_tree = tp_trees_folder[self._tps_tree_name]
-                    case _:
-                        raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
-                
-            self._log.info(f"{self._tps_tree_name} found with {self.tps_tree.num_entries} rows")
+            if self._tps_folder in f[f'{self._analyzer_name}']:
+
+                tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
+                if tps_key:
+                    logging.info(f'Loading {tps_key}')
+                    self.tps_tree = tp_trees_folder[tps_key]
+                    self._tps_tree_name = tps_key
+                else:
+
+                    match len(tp_trees_folder.keys(cycle=False)):
+                        case 0:
+                            self.tps_tree = None
+                        case 1:
+                            self._tps_tree_name = tp_trees_folder.keys(cycle=False)[0]
+                            logging.info(f'Loading {self._tps_tree_name}')
+                            self.tps_tree = tp_trees_folder[self._tps_tree_name]
+                        case _:
+                            raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
+                    
+                self._log.info(f"{self._tps_tree_name} found with {self.tps_tree.num_entries} rows")
+            else:
+                self._log.info(f"No {self._tps_folder} folder found")
+
 
 
     def _read_infos(self, tfile, info_path) -> Dict:
@@ -202,9 +179,9 @@ class TriggerPrimitivesWorkspace:
         - bt_is_signal: 1 if the tp was backtracked to a signal
 
         """
-        self.tps['time_peak'] = self.tps.time_start+self.tps.samples_over_threshold*32
+        self.tps['time_peak'] = self.tps.time_start+self.tps.samples_to_peak*32
         self.tps['sample_start'] = self.tps.time_start//32
-        self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_over_threshold
+        self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_to_peak
         self.tps['bt_is_signal'] = (self.tps.bt_numelectrons > 0).astype(np.int8)
 
     def get_event_selection_str(self, tree) -> str:

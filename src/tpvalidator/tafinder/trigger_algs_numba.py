@@ -66,6 +66,29 @@ def numba_dbscan(z, t, eps, min_samples):
     return labels
 
 
+def add_dbscan_variables(tps: pd.DataFrame) -> None:
+    """Add DB scan variables to the tps dataframe, namely
+
+    `dbs_t`: conversion from time in the local readout window to cm
+    `dbs_z`: conversoon from channel number to cm
+
+    Args:
+        tps (_type_): _description_
+    """
+    # conversion parameters to move from channel ID & ticks to cm. 
+    hd_wire_pitch = 0.48 #cm 
+    vd_wire_pitch = 0.51 #cm 
+    wire_pitch = vd_wire_pitch
+    drift_velocity = 0.16 #cm/us
+    sampling_rate = 0.5 #us/tick 
+    cm_per_tick = drift_velocity * sampling_rate
+
+    tps['dbs_t'] = (tps["sample_start"].to_numpy() * cm_per_tick).astype(np.float32)
+    tps['dbs_z'] = (tps["channel"].to_numpy() * wire_pitch).astype(np.float32)
+
+    return tps
+
+
 def apply_dbscan(window_tps, epsilon=2, min_samples=2):
 
     # conversion parameters to move from channel ID & ticks to cm. 
@@ -78,7 +101,7 @@ def apply_dbscan(window_tps, epsilon=2, min_samples=2):
 
     df = window_tps
 
-    time_cm = (df["time_start"].to_numpy() * cm_per_tick).astype(np.float32)
+    time_cm = (df["sample_start"].to_numpy() * cm_per_tick).astype(np.float32)
     z = (df["channel"].to_numpy() * wire_pitch).astype(np.float32)
     adc = df["adc_integral"].to_numpy()
     df_index = df.index.to_numpy()
@@ -99,15 +122,6 @@ def apply_dbscan(window_tps, epsilon=2, min_samples=2):
     cluster_ids = np.unique(labels[valid])
     clusters = [adc[labels == cid] for cid in cluster_ids]
     cluster_sums = np.array([c.sum() for c in clusters])
-
-    summary=(
-        len(cluster_ids),
-        cluster_sums.mean(),
-        cluster_sums.sum(),
-        cluster_sums.max()
-    )
-
-    # return summary, df_index, labels
 
 
     return pd.Series({

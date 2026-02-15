@@ -20,9 +20,11 @@ default_cfg = {
     'ta_inspect_sadc_min': 7500,
     'ta_inspect_sadc_max': 50000,
     'ta_inspect_sadc_cluster_threshold': 7500,
-    'ta_win_sadc_dist_file': '1x8x6_radbkg_tawin_dist.root',
+    'ta_win_sadc_dist_file': None,
     'ta_win_sadc_dist_rdm_seed': 123,
-    'ta_win_sadc_add_bkg': False
+    'ta_win_sadc_add_bkg': False,
+    'ta_dbscan_epsilon': 2,
+    'ta_dbscan_min_neigh': 2
 }
 
 
@@ -104,14 +106,16 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         # Load bakground window sadc distribution
         ta_win_sadc_dist_file = self._cfg.get('ta_win_sadc_dist_file', None)
-        print(f"Loading '{ta_win_sadc_dist_file}'")
-        with uproot.open(ta_win_sadc_dist_file) as f:
-            h1 = f["h1"].to_hist()
+        self.bkg_dist=None
+        if ta_win_sadc_dist_file:
+            print(f"Loading '{ta_win_sadc_dist_file}'")
+            with uproot.open(ta_win_sadc_dist_file) as f:
+                h1 = f["h1"].to_hist()
 
-            # extract histogram info
-            counts = h1.view()
-            edges  = h1.axes[0].edges
-            self.bkg_dist = rv_histogram((counts, edges))
+                # extract histogram info
+                counts = h1.view()
+                edges  = h1.axes[0].edges
+                self.bkg_dist = rv_histogram((counts, edges))
 
 
     def apply_preselection(self, tps_df: TrgDataFrame):
@@ -133,6 +137,8 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         return tps_in_win
     
     def add_window_bkg_sadc(self, ta_window_stats: TrgDataFrame) -> TrgDataFrame:
+
+        print("Adding sadc background offset to tawindows")
 
         rnd_seed = self._cfg['ta_win_sadc_dist_rdm_seed']
         ta_window_stats['bkg_sadc'] = self.bkg_dist.rvs(size=len(ta_window_stats), random_state=rnd_seed)
@@ -163,10 +169,14 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         tps_to_proc = tps_to_proc[tps_to_proc._keep == True]
 
+
+        epsilon=self._cfg['ta_dbscan_epsilon']
+        min_neigh=self._cfg['ta_dbscan_min_neigh']
+
         return (
             tps_to_proc
             .groupby(self.tawin_keys, sort=False)
-            .progress_apply(apply_dbscan, include_groups = False)
+            .progress_apply(apply_dbscan, epsilon=epsilon, min_samples=min_neigh, include_groups = False)
             .reset_index()
         )
 
@@ -183,7 +193,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         ta_window_stats = (
             tps_in_wins.groupby(self.tawin_keys, sort=False)
             .agg(
-                n_entries=('ta_win_id', "size"),
+                n_tps=('ta_win_id', "size"),
                 sadc=("adc_integral", "sum"),
                 channel_std =('channel', 'std'),
                 sample_peak_std =('sample_peak', 'std')
@@ -227,6 +237,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
                 'max_win_cluster_sadc': g.max_cluster_sadc.max(),
                 'tot_n_clusters': g.n_clusters.sum(),
                 'num_accept_win': (g.sadc_window_thres_hi == True).sum(),
+                'num_inspect_win': ((g.sadc_window_thres_hi == False) & (g.sadc_window_thres_lo == True)).sum(),
                 'num_inspect_accept_win': ((g.sadc_window_thres_hi == False) & (g.sadc_window_thres_lo == True) & (g.max_cluster_sadc > cluster_sadc_thres)).sum()
             }) 
 

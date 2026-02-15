@@ -5,69 +5,25 @@ import logging
 import tpvalidator.mcprod.workspace as workspace
 from tpvalidator.utilities import temporary_log_level
 from rich import print
+import json
 
 _miniprod_dir = Path(Path(tpvalidator.__file__).parents[2]) / 'data' / 'vd' / 'mini_prod'
 
-# def load_mc_datasets():
 
-#     dataset_info = {
-#         'readout_window' : 8500
-#     }
+radbkg_tawin_dist_file = _miniprod_dir / 'dist' / '1x8x6_radbkg_tawin_dist.root'
 
-#     from pathlib import Path
-#     miniprod_dir = _miniprod_dir/ 'tp_presel'
+tp_presel_spec = _miniprod_dir / 'tp_presel.json'
 
-#     with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.WARN):
-#         em_ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / 'vd_1x8x6_eminus_center_2333289_tppresel_ana.ntuple.root', extra_info=dataset_info)
-#     print(f"Dataset e-minus: {em_ws.num_events} events")
-#     print(em_ws.info)
+def load_tp_presel_datasets( selection=None ):
 
+    with open(tp_presel_spec) as json_data:
+        cfg = json.load(json_data)
 
-#     with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.WARN):
-#         gm_ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / 'vd_1x8x6_gamma_center_2333392_tppresel_ana.ntuple.root', extra_info=dataset_info)
-#     print(f"Dataset gamma: {gm_ws.num_events} events")
-#     print(gm_ws.info)
-
-
-#     with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.WARN):
-#         mu_ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / 'vd_1x8x6_muminus_center_2333393_tppresel_ana.ntuple.root', extra_info=dataset_info)
-#     print(f"Dataset mu-minus: {mu_ws.num_events} events")
-#     print(mu_ws.info)
-
-
-#     with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.WARN):
-#         rad_ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / 'vd_1x8x6_radbkg_2333394_23335306_233378794_tppresel_ana.ntuple.root', extra_info=dataset_info)
-#     print(f"Dataset radiols: {rad_ws.num_events} events")
-#     print(rad_ws.info)
-
-#     datasets = {
-#         'e-minus': em_ws,
-#         'gamma': gm_ws,
-#         'mu-minus': mu_ws,
-#         'radbkg': rad_ws,
-#     }
-
-#     wirecell_ides_cut = 'sample_peak > 100 & sample_peak < 8100'
-
-#     for n, df in datasets.items():
-#         df.tps.query(wirecell_ides_cut, inplace=True)
-#         df.tps.extra_info['readout_window'] = 8000
-
-#     return datasets
-
-
-def load_mc_datasets( selection=None ):
-
-    dataset_info = {
-        'readout_window' : 8500
-    }
-
-    datasets_spec = {
-        'e-minus': 'vd_1x8x6_eminus_center_2333289_tppresel_ana.ntuple.root',
-        'gammas': 'vd_1x8x6_gamma_center_2333392_tppresel_ana.ntuple.root',
-        'mu-minus': 'vd_1x8x6_muminus_center_2333393_tppresel_ana.ntuple.root',
-        'radbkg': 'vd_1x8x6_radbkg_2333394_23335306_233378794_tppresel_ana.ntuple.root',
-    }
+    dataset_path = cfg['dataset_path']
+    dataset_info = cfg['dataset_info']
+    datasets_spec = cfg['datasets_spec']
+    tp_cut = cfg['tp_cut']
+    tp_info_update = cfg['tp_info_update']
 
     if selection:
         dataset_sel = set(selection)
@@ -78,7 +34,7 @@ def load_mc_datasets( selection=None ):
         datasets_spec = { k:v for k,v in datasets_spec.items() if k in dataset_sel }
 
     from pathlib import Path
-    miniprod_dir = _miniprod_dir/ 'tp_presel'
+    miniprod_dir = _miniprod_dir/ dataset_path
 
     datasets = {}
     for s, p in datasets_spec.items():
@@ -88,10 +44,10 @@ def load_mc_datasets( selection=None ):
         print(ws.info)
         datasets[s] = ws
 
-    wirecell_ides_cut = 'sample_peak > 100 & sample_peak < 8100'
 
     for n, df in datasets.items():
-        df.tps.query(wirecell_ides_cut, inplace=True)
-        df.tps.extra_info['readout_window'] = 8000
+        df.tps.query(tp_cut, inplace=True)
+        df.tps.extra_info.update(tp_info_update)
 
     return datasets
+
