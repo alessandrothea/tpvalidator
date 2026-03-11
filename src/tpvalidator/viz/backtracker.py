@@ -5,7 +5,7 @@ import matplotlib.patches as patches
 
 from ..workspace import TriggerPrimitivesWorkspace
 from typing import Tuple, Optional, Union, Sequence, Dict, List
-from ..utilities import subplot_autogrid
+from ..utils import subplot_autogrid
 from rich import print
 
 class BackTrackerPlotter:

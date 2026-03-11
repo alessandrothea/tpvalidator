@@ -1,14 +1,14 @@
 from rich import print
-import tpvalidator.tafinder
+import tpvalidator.algo.tafinder
 import logging
 import click
 
-import tpvalidator.mcprod.workspace as workspace
-from tpvalidator.utilities import temporary_log_level
+import tpvalidator.workspace as workspace
+from tpvalidator.utils import temporary_log_level
 
-import tpvalidator.datasets.miniprod as miniprod; 
+import tpvalidator.datasets.miniprod as miniprod
 import pandas as pd
-import tpvalidator.tafinder.tpprocessor as tpprocessor
+import tpvalidator.algo.tafinder.tpprocessor as tpprocessor
 
 import numpy as np
 

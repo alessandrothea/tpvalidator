@@ -4,10 +4,10 @@ import yaml
 from typing import Optional
 from pydantic import BaseModel, field_validator
 import tpvalidator
-import tpvalidator.mcprod.workspace as workspace
+import tpvalidator.workspace as workspace
 
 _package_root = Path(tpvalidator.__file__).parents[2]
-from tpvalidator.utilities import temporary_log_level
+from tpvalidator.utils import temporary_log_level
 from rich import print
 
 _log = logging.getLogger(__name__)

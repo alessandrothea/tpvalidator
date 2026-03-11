@@ -12,9 +12,9 @@ import pandas as pd
 import cmocean.cm as cmo
 
 
-from ..histograms import hist_mean_std, calculate_natural_bins
+from ..viz.histograms import hist_mean_std, calculate_natural_bins
 from ..workspace import TriggerPrimitivesWorkspace
-from ..utilities import subplot_autogrid, df_to_tp_rates
+from ..utils import subplot_autogrid, df_to_tp_rates
 
 
 

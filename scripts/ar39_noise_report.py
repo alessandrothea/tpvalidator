@@ -8,13 +8,13 @@ import mistletoe as mt
 import uproot
 import textwrap
 import logging
-import tpvalidator.mcprod.workspace as workspace
-import tpvalidator.utilities as utils
-import tpvalidator.mcprod.analyzers.snn as snn
+import tpvalidator.workspace as workspace
+import tpvalidator.utils as utils
+import tpvalidator.analyzers.snn as snn
 
 from rich import print
 from rich.logging import RichHandler
-from tpvalidator.utilities import temporary_log_level
+from tpvalidator.utils import temporary_log_level
 from io import BytesIO
 
 
@@ -22,7 +22,7 @@ from fpdf import FPDF, HTML2FPDF, FontFace, TextStyle, Align
 from pathlib import Path
 
 
-from tpvalidator.reporting.portfolio import ReportPDF, Portfolio
+from tpvalidator.report.portfolio import ReportPDF, Portfolio
 
 
 FORMAT = "%(message)s"

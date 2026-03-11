@@ -43,8 +43,6 @@ dependencies = [
 ]
 
 [project.scripts]
-tpvalidator = "tpvalidator:main"
-tp-basic-checks = "tpvalidator.basic:main"
 ta-finder = "tpvalidator.cli.tafind:main"
 
 [build-system]

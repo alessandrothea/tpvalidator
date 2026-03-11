@@ -2,8 +2,8 @@ from pathlib import Path
 import tpvalidator
 
 import logging
-import tpvalidator.mcprod.workspace as workspace
-from tpvalidator.utilities import temporary_log_level
+import tpvalidator.workspace as workspace
+from tpvalidator.utils import temporary_log_level
 from rich import print
 import json
 

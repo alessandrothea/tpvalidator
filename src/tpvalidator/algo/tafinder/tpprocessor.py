@@ -1,5 +1,5 @@
 from rich import print
-from ..mcprod.workspace import TrgDataFrame
+from ...workspace import TrgDataFrame
 import os.path
 
 
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 
-from tpvalidator.tafinder.trigger_algs_numba import apply_dbscan
+from tpvalidator.algo.tafinder.trigger_algs_numba import apply_dbscan
 
 #-----------------------
 
