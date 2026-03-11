@@ -4,6 +4,7 @@ import uproot
 import json
 import pandas as pd
 import numpy as np
+import awkward as ak
 
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
@@ -39,7 +40,7 @@ class TriggerPrimitivesWorkspace:
         self._mctruths_tree_name = f'{self._analyzer_name}/mctruths'
         self._mcneutrinos_tree_name = f'{self._analyzer_name}/mcneutrinos'
         self._mcparticles_tree_name = f'{self._analyzer_name}/mcparticles'
-        self._ides_tree_name = f'{self._analyzer_name}/simides'
+        self._simides_tree_name = f'{self._analyzer_name}/simides'
         
         self._rawdigits_tree_name: str = 'triggerana/rawdigis_tree'
 
@@ -55,7 +56,7 @@ class TriggerPrimitivesWorkspace:
         self._mctruths = None
         self._mcneutrinos = None
         self._mcparticles = None
-        self._ides = None
+        self._simides = None
         self._tps = None
 
         # Waveforms registry
@@ -95,7 +96,7 @@ class TriggerPrimitivesWorkspace:
                 'mctruths',
                 'mcneutrinos',
                 'mcparticles',
-                'ides'
+                'simides'
             ]
 
             for t in tree_names:
@@ -163,7 +164,10 @@ class TriggerPrimitivesWorkspace:
         tree = getattr(self, f'{df_id}_tree')
         ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
         self._log.debug(f"Applying event cut to {df_id}")
-        df = TrgDataFrame(tree.arrays(library="np", cut=ev_cut))
+
+        arr = tree.arrays(library="ak", cut=ev_cut)
+        df = TrgDataFrame(ak.to_dataframe(arr))
+
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df
@@ -245,10 +249,10 @@ class TriggerPrimitivesWorkspace:
     
     @property
     def ides(self):
-        if self._ides is None:
+        if self._simides is None:
             self._log.debug("Loading IDEs dataset")
-            self._ides = self._load_dataframe_with_event_cut('ides')
-        return self._ides
+            self._simides = self._load_dataframe_with_event_cut('ides')
+        return self._simides
 
     @property
     def tps(self):
@@ -257,6 +261,7 @@ class TriggerPrimitivesWorkspace:
             self._tps = self._load_dataframe_with_event_cut('tps')
             self._decorate_tps_dataframe()
         return self._tps
+
     
 
     @property
@@ -389,14 +394,6 @@ class TriggerPrimitivesWorkspace:
                 df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
 
                 return df_waveforms
-                
-            # branch_names = [f"{ch:d}" for ch in channel_ids ]
-            # with uproot.open(f'{filepath}:{tree_name}') as tree:
-            #     arrays = tree.arrays(branch_names, library="ak", entry_stop=max_events)
-            #     df = ak.to_dataframe(arrays)
-            #     df.columns = [int(c) for c in df.columns]
-            #     df.index = np.arange(0, len(df))
-            #     return df
             
         except Exception as e:
             print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")

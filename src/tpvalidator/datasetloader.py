@@ -1,6 +1,6 @@
 from pathlib import Path
-import json
 import logging
+import yaml
 from typing import Optional
 from pydantic import BaseModel, field_validator
 import tpvalidator
@@ -38,7 +38,7 @@ def load(dataset_dir: str):
     if not dataset_dir.is_dir():
         raise NotADirectoryError(f"'{dataset_dir}' is not a directory")
 
-    cfg_file = dataset_dir / "datasets.json"
+    cfg_file = dataset_dir / "datasets.yaml"
     if not cfg_file.exists():
         raise FileNotFoundError(f"Configuration file '{cfg_file}' does not exist")
     if not cfg_file.is_file():
@@ -46,8 +46,8 @@ def load(dataset_dir: str):
 
     try:
         with open(cfg_file) as f:
-            raw = json.load(f)
-    except json.JSONDecodeError as e:
+            raw = yaml.safe_load(f)
+    except yaml.YAMLError as e:
         raise ValueError(f"Failed to parse '{cfg_file}': {e}")
 
     cfg = DatasetsConfig.model_validate(raw)
@@ -55,8 +55,7 @@ def load(dataset_dir: str):
     dataset_path = dataset_dir / cfg.dataset_path
     datasets = {}
     for name, filename in cfg.datasets_spec.items():
-        with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.INFO):
-            ws = workspace.TriggerPrimitivesWorkspace(dataset_path / filename, extra_info=cfg.dataset_info)
+        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / filename, extra_info=cfg.dataset_info)
         print(f"Dataset '{name}': {ws.num_events} events")
         print(ws.info)
         datasets[name] = ws
