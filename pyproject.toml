@@ -31,6 +31,7 @@ dependencies = [
     "particle>=0.26.0",
     "plotly>=6.1.2",
     "pyarrow>=23.0.0",
+    "pydantic>=2.12.5",
     "rich>=14.1.0",
     "scikit-learn>=1.8.0",
     "scipy>=1.16.0",
