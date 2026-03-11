@@ -1,4 +1,3 @@
-
 # Number of channels per CRP in simulation
 crp_tot_num_chans_sim = 3456
 crp_view_0_num_chans_sim = 1144 
@@ -81,7 +80,7 @@ class FDVDGeometry_1x6x8:
 
     @classmethod
     def tpc_view_channel(cls, channel):
-        
+
         tpc_ch = cls.tpc_channel(channel)
 
         if tpc_ch < cls.tpc_view_0_num_chans_sim:
