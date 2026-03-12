@@ -9,6 +9,8 @@ import awkward as ak
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
 
+from .rootio import find_active_channels_branch, read_sparse_waveforms, read_tree
+
 
 class TrgDataFrame(pd.DataFrame):
     # normal properties
@@ -205,9 +207,7 @@ class TriggerPrimitivesWorkspace:
         ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
         self._log.debug(f"Applying event cut to {df_id}")
 
-        arr = tree.arrays(library="ak", cut=ev_cut)
-        df = TrgDataFrame(ak.to_dataframe(arr))
-
+        df = TrgDataFrame(read_tree(tree, cut=ev_cut))
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df
@@ -400,57 +400,8 @@ class TriggerPrimitivesWorkspace:
 
 
     def _find_rawdigit_tree_active_channels_branch(self):
-        try:
-            with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
-                branch_names = tree.keys()
-                for name in ['active_channels', 'chans_with_electrons']:
-                    if name in branch_names:
-                        return name
-                return None
-        except Exception as e:
-            print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
-            return None
+        return find_active_channels_branch(self.rawdigits_tree)
 
     def _load_sparse_waveform_data(self, ev_sel: Union[int, list] = 1):
         """Load sparse rawdigits waveforms for a specific event from a ROOT file."""
-        activ_chans_branch = self._find_rawdigit_tree_active_channels_branch()
-        if activ_chans_branch is None:
-            raise RuntimeError("Active channel branch not found in tree. This doesn't look like a sparse waveform tree")
-
-        try:
-            with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
-
-                branches = ["event", "run", "subrun"] + [activ_chans_branch]
-
-                df_evs = tree.arrays(branches, library='pd')
-
-                if not (type(ev_sel) == int and ev_sel == 1):
-                    raise RuntimeError("Only the loading of the first event is supported")
-
-                ev_num = df_evs.event[0]
-
-                chans = ([c for c in df_evs[df_evs.event == ev_num][activ_chans_branch][0]])
-
-                self._log.debug(f"found {len(chans)} channels")
-
-                self._log.debug("Loading tree into np arrays")
-                arrays = tree.arrays(["event", "run", "subrun"] + [str(c) for c in chans], library='np')
-                self._log.debug("Done loading tree into np arrays")
-
-                self._log.debug("Converting np arrays to dataframe")
-                df = pd.DataFrame(arrays)
-                self._log.debug("Done converting np arrays to dataframe")
-
-                df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
-
-                self._log.debug("Expanding waveforms")
-                df_waveforms = df.explode(chans)
-                self._log.debug("Done expanding waveforms")
-
-                df_waveforms = df_waveforms.astype({c: 'uint16' for c in chans})
-                df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
-
-                return df_waveforms
-        except Exception as e:
-            print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
-            return None
+        return read_sparse_waveforms(self._rawdigits_path, self._rawdigits_tree_name, ev_sel)
