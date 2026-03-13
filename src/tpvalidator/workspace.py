@@ -9,7 +9,7 @@ import awkward as ak
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
 
-from .rootio import find_active_channels_branch, read_sparse_waveforms, read_tree
+from .rootio import TriggerNtupleReader, find_active_channels_branch, read_sparse_waveforms
 
 
 class TrgDataFrame(pd.DataFrame):
@@ -92,17 +92,19 @@ class TriggerPrimitivesWorkspace:
     # TODO: add arguments to disable truth info loading
     def __init__(self, data_path: str, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
 
+        self._tuple_rdr = None
+
         # Labels and ROOT object paths
         self._analyzer_name = analyzer_name
         self._tps_folder  = tps_folder
-        self._info_name = f'{self._analyzer_name}/info'
+        self._info_name = 'info'
 
         # Standard trees
-        self._event_summary_tree_name = f'{self._analyzer_name}/event_summary'
-        self._mctruths_tree_name = f'{self._analyzer_name}/mctruths'
-        self._mcneutrinos_tree_name = f'{self._analyzer_name}/mcneutrinos'
-        self._mcparticles_tree_name = f'{self._analyzer_name}/mcparticles'
-        self._simides_tree_name = f'{self._analyzer_name}/simides'
+        self._event_summary_tree_name = f'event_summary'
+        self._mctruths_tree_name = f'mctruths'
+        self._mcneutrinos_tree_name = f'mcneutrinos'
+        self._mcparticles_tree_name = f'mcparticles'
+        self._simides_tree_name = f'simides'
 
         self._rawdigits_tree_name: str = 'triggerana/rawdigis_tree'
 
@@ -130,7 +132,7 @@ class TriggerPrimitivesWorkspace:
         self._mctruth_blocks = None
 
         # Initialize trees
-        self._do_init(tps_key)
+        self._do_init_2g(tps_key)
 
         self._extra_info.update({
             'num_events': self.num_events,
@@ -138,62 +140,125 @@ class TriggerPrimitivesWorkspace:
         })
 
 
-    def _do_init(self, tps_key: str):
 
-        self._log.info("Opening Trigger Primitives file")
-        with uproot.open(self._data_path) as f:
+    ###---- 2g stuff here
 
-            self._log.debug(f.keys())
-            self._log.info("Adding processing info")
-            self.info = self._read_infos(f, self._info_name)
 
-            tree_names = [
-                'event_summary',
-                'mctruths',
-                'mcneutrinos',
-                'mcparticles',
-                'simides'
-            ]
+    def _do_init_2g(self, tps_key: str):
 
-            for t in tree_names:
-                self._log.info(f"Adding '{t}' data")
-                ttree_name = getattr(self, f'_{t}_tree_name')
+        self._log.info("Opening Trigger NTuple file")
+        self._tuple_rdr = TriggerNtupleReader(self._data_path, analyzer_dir=self._analyzer_name)
 
-                try:
-                    ttree = f[ttree_name]
-                    self._log.info(f"{ttree_name} found with {ttree.num_entries} rows")
-                except uproot.KeyInFileError:
-                    self._log.warning(f"Key '{ttree_name}' not found in file.")
-                    ttree = None
-                setattr(self, f'{t}_tree', ttree)
+        # Extract file handle for direct access to ROOT objects when needed
+        f = self._tuple_rdr.file
 
-            # Add trigger primitives
-            if self._tps_folder in f[f'{self._analyzer_name}']:
+        self._log.debug(f.keys())
+        self._log.info("Adding processing info")
+        self.info = self._tuple_rdr.read_info(self._info_name)
 
-                tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
-                if tps_key:
-                    logging.info(f'Loading {tps_key}')
-                    self.tps_tree = tp_trees_folder[tps_key]
-                    self._tps_tree_name = tps_key
-                else:
-                    match len(tp_trees_folder.keys(cycle=False)):
-                        case 0:
-                            self.tps_tree = None
-                        case 1:
-                            self._tps_tree_name = tp_trees_folder.keys(cycle=False)[0]
-                            logging.info(f'Loading {self._tps_tree_name}')
-                            self.tps_tree = tp_trees_folder[self._tps_tree_name]
-                        case _:
-                            raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
+        tree_names = [
+            'event_summary',
+            'mctruths',
+            'mcneutrinos',
+            'mcparticles',
+            'simides'
+        ]
 
-                self._log.info(f"{self._tps_tree_name} found with {self.tps_tree.num_entries} rows")
+        for t in tree_names:
+            self._log.info(f"Adding '{t}' data")
+            ttree_name = getattr(self, f'_{t}_tree_name')
+
+            try:
+                ttree = self._tuple_rdr.read_tree(ttree_name)
+            except uproot.KeyInFileError:
+                self._log.warning(f"Key '{ttree_name}' not found in file.")
+                ttree = None
+            setattr(self, f'{t}_tree', ttree)
+
+        # Add trigger primitives
+        if self._tps_folder in f[f'{self._analyzer_name}']:
+
+            tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
+            if tps_key:
+                logging.info(f'Loading {tps_key}')
+                self.tps_tree = tp_trees_folder[tps_key]
+                self._tps_tree_name = tps_key
             else:
-                self._log.info(f"No {self._tps_folder} folder found")
+                match len(tp_trees_folder.keys(cycle=False)):
+                    case 0:
+                        self.tps_tree = None
+                    case 1:
+                        self._tps_tree_name = f'{self._tps_folder}/{tp_trees_folder.keys(cycle=False)[0]}'
+                        logging.info(f'Loading {self._tps_tree_name}')
+                        self.tps_tree = self._tuple_rdr.read_tree(f"{self._tps_tree_name}")
+                    case _:
+                        raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
+
+            self._log.info(f"{self._tps_tree_name} found")
+            print(f"{self._tps_tree_name} found")
+        else:
+            self._log.info(f"No {self._tps_folder} folder found")
+
+    ###
 
 
-    def _read_infos(self, tfile, info_path) -> Dict:
-        named_info = tfile[info_path]
-        return json.loads(named_info.members['fTitle'])
+    # def _do_init(self, tps_key: str):
+
+    #     self._log.info("Opening Trigger NTuple file")
+
+    #     with uproot.open(self._data_path) as f:
+
+    #         self._log.debug(f.keys())
+    #         self._log.info("Adding processing info")
+    #         self.info = self._read_infos(f, self._info_name)
+
+    #         tree_names = [
+    #             'event_summary',
+    #             'mctruths',
+    #             'mcneutrinos',
+    #             'mcparticles',
+    #             'simides'
+    #         ]
+
+    #         for t in tree_names:
+    #             self._log.info(f"Adding '{t}' data")
+    #             ttree_name = getattr(self, f'_{t}_tree_name')
+
+    #             try:
+    #                 ttree = f[ttree_name]
+    #                 self._log.info(f"{ttree_name} found with {ttree.num_entries} rows")
+    #             except uproot.KeyInFileError:
+    #                 self._log.warning(f"Key '{ttree_name}' not found in file.")
+    #                 ttree = None
+    #             setattr(self, f'{t}_tree', ttree)
+
+    #         # Add trigger primitives
+    #         if self._tps_folder in f[f'{self._analyzer_name}']:
+
+    #             tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
+    #             if tps_key:
+    #                 logging.info(f'Loading {tps_key}')
+    #                 self.tps_tree = tp_trees_folder[tps_key]
+    #                 self._tps_tree_name = tps_key
+    #             else:
+    #                 match len(tp_trees_folder.keys(cycle=False)):
+    #                     case 0:
+    #                         self.tps_tree = None
+    #                     case 1:
+    #                         self._tps_tree_name = tp_trees_folder.keys(cycle=False)[0]
+    #                         logging.info(f'Loading {self._tps_tree_name}')
+    #                         self.tps_tree = tp_trees_folder[self._tps_tree_name]
+    #                     case _:
+    #                         raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
+
+    #             self._log.info(f"{self._tps_tree_name} found with {self.tps_tree.num_entries} rows")
+    #         else:
+    #             self._log.info(f"No {self._tps_folder} folder found")
+
+
+    # def _read_infos(self, tfile, info_path) -> Dict:
+    #     named_info = tfile[info_path]
+    #     return json.loads(named_info.members['fTitle'])
 
 
     @staticmethod
@@ -204,10 +269,8 @@ class TriggerPrimitivesWorkspace:
     def _load_dataframe_with_event_cut(self, df_id: str) -> pd.DataFrame:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
         tree = getattr(self, f'{df_id}_tree')
-        ev_cut = self.get_event_selection_str(tree) if tree.num_entries > 0 else None
-        self._log.debug(f"Applying event cut to {df_id}")
+        df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
 
-        df = TrgDataFrame(read_tree(tree, cut=ev_cut))
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df
@@ -223,19 +286,6 @@ class TriggerPrimitivesWorkspace:
         self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_to_peak
         self.tps['bt_is_signal'] = (self.tps.bt_numelectrons > 0).astype(np.int8)
 
-    def get_event_selection_str(self, tree) -> str:
-        """Returns the event selection string based on the first/last entry fields."""
-        ev_list = self._get_event_id_list(tree)
-
-        cuts = []
-        if not self._first_entry is None:
-            cuts.append(f'(event >= {ev_list[self._first_entry]})')
-
-        if not self._last_entry is None:
-            cuts.append(f'(event <= {ev_list[self._last_entry]})')
-
-        event_cut = ' & '.join(cuts) if len(cuts) > 0 else None
-        return event_cut
 
     @property
     def tp_maker_name(self):
@@ -250,12 +300,14 @@ class TriggerPrimitivesWorkspace:
             self._event_summary = self._load_dataframe_with_event_cut('event_summary')
         return self._event_summary
 
+
     @property
     def mctruths(self):
         if self._mctruths is None:
             self._log.debug("Loading MCTruth dataset")
             self._mctruths = self._load_dataframe_with_event_cut('mctruths')
         return self._mctruths
+
 
     @property
     def mcneutrinos(self):
@@ -264,6 +316,7 @@ class TriggerPrimitivesWorkspace:
             self._mcneutrinos = self._load_dataframe_with_event_cut('mcneutrinos')
         return self._mcneutrinos
 
+
     @property
     def mcparticles(self):
         if self._mcparticles is None:
@@ -271,12 +324,14 @@ class TriggerPrimitivesWorkspace:
             self._mcparticles = self._load_dataframe_with_event_cut('mcparticles')
         return self._mcparticles
 
+
     @property
     def ides(self):
         if self._simides is None:
             self._log.debug("Loading IDEs dataset")
             self._simides = self._load_dataframe_with_event_cut('ides')
         return self._simides
+
 
     @property
     def tps(self):
@@ -290,9 +345,14 @@ class TriggerPrimitivesWorkspace:
     @property
     def mctruth_blocks_map(self):
         if self._mctruth_blocks is None:
-            self._mctruth_blocks = dict(
-                self.mctruths[["block_id", "generator_name"]].drop_duplicates().values
-            )
+
+
+            if 'mctruth_blockid_map' in self.info:
+                self._mctruth_blocks = dict(self.info['mctruth_blockid_map'])
+            else:
+                self._mctruth_blocks = dict(
+                    self.mctruths[["block_id", "generator_name"]].drop_duplicates().values
+                )
         return self._mctruth_blocks
 
     #
@@ -305,10 +365,13 @@ class TriggerPrimitivesWorkspace:
 
     @property
     def event_list(self) -> pd.DataFrame:
+        """DataFrame of events in the workspace, with columns ``event``, ``run``, and ``subrun``.
+
+        Lazily loaded from the ``event_summary`` tree on first access. Respects the
+        ``first_entry`` / ``last_entry`` slice configured at construction time.
+        """
         if self._event_list is None:
-            ev_cut = self.get_event_selection_str(self.event_summary_tree) if self.event_summary_tree.num_entries > 0 else None
-            self._log.debug(f"Event cut : {ev_cut}")
-            self._event_list = self.event_summary_tree.arrays(['event', 'run', 'subrun'], cut=ev_cut, library='pd')
+            self._event_list = self.event_summary_tree.to_df(branches=['event', 'run', 'subrun'], entry_start=self._first_entry, entry_stop=self._last_entry)
         return self._event_list
 
 

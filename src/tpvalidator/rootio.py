@@ -4,29 +4,340 @@ import awkward as ak
 import pandas as pd
 import numpy as np
 import json
-import os
+from pathlib import Path
 from typing import Optional, Union, Dict
 
 _log = logging.getLogger(__name__)
 
+def _check_file_path(file_path: Path) -> None:
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        if not file_path.is_file():
+            raise ValueError(f"Path is not a file: {file_path}")
 
-def _is_readable_file(file_path: str) -> bool:
-    return os.path.isfile(file_path) and os.access(file_path, os.R_OK)
 
 
-def read_tree(tree, cut: Optional[str] = None, branch_names: Optional[list] = None) -> pd.DataFrame:
-    """Core primitive: load an uproot TTree into a DataFrame.
+
+class TriggerTree:
+    """Thin wrapper around an uproot TTree that adds a :meth:`to_df` convenience method.
+
+    Unknown attribute access is delegated to the underlying uproot tree, so
+    all standard uproot introspection (``keys()``, ``num_entries``, etc.) works
+    directly on this object.
 
     Args:
-        tree: open uproot TTree object
-        cut (str, optional): uproot cut expression to filter rows. Defaults to None.
-        branch_names (list, optional): branches to load. Defaults to None (all branches).
-
-    Returns:
-        pd.DataFrame
+        tree: open uproot TTree object.
     """
-    arr = tree.arrays(branch_names, library="ak", cut=cut)
-    return ak.to_dataframe(arr)
+
+    def __init__(self, tree):
+        self._tree = tree
+
+    def __getattr__(self, name):
+        # Delegate all unknown attributes to the wrapped tree
+        return getattr(self._tree, name)
+
+    def to_df(self, branches=None, entry_start=None, entry_stop=None):
+        """Read branches into a pandas DataFrame via awkward-array.
+
+        Args:
+            branches (list, optional): branch names to load. Defaults to
+                ``None`` (all branches).
+            entry_start (int, optional): first entry index to read. Defaults
+                to ``None`` (beginning of tree).
+            entry_stop (int, optional): one-past-last entry index to read.
+                Defaults to ``None`` (end of tree).
+
+        Returns:
+            pd.DataFrame with one row per entry (or per element for
+            variable-length branches after awkward flattening).
+        """
+        arr = self._tree.arrays(
+            branches,
+            entry_start=entry_start,
+            entry_stop=entry_stop,
+            library="ak"
+        )
+        return ak.to_dataframe(arr)
+    
+class TriggerNtupleReader:
+    """Reader for ROOT ntuples produced by the trigger analyser module.
+
+    Opens a ROOT file and exposes its TTrees and metadata objects through a
+    thin uproot wrapper.  Unknown attribute access is delegated to the
+    underlying ``uproot`` file object, so you can use standard uproot
+    introspection (e.g. ``reader.keys()``) directly on the reader.
+
+    Args:
+        file_path (str): path to the ROOT file.
+        analyzer_dir (str, optional): top-level directory inside the ROOT file
+            that contains the trees and info objects. Defaults to
+            ``'triggerAna'``.
+
+    Attributes:
+        file_path (str): path of the opened ROOT file.
+        analyzer_dir (str): directory prefix used when resolving tree paths.
+
+    Example::
+
+        reader = TriggerNtupleReader("output.root")
+        info   = reader.read_info()
+        tree   = reader.read_tree("tptree")
+        df     = tree.to_df(branches=["event", "run", "subrun"])
+    """
+
+    def __init__(self, file_path: str, analyzer_dir: Optional[str] = 'triggerAna'):
+        path = Path(file_path)
+        _check_file_path(path)
+
+        self.file_path = file_path
+        self.analyzer_dir = analyzer_dir
+        self._root_file = None
+
+        self._open_file()
+
+    def __getattr__(self, name):
+        # Delegate all unknown attributes to the wrapped tree
+        return getattr(self._root_file, name)
+
+    def _open_file(self) -> None:
+        try:
+            self._root_file = uproot.open(self.file_path)
+        except Exception as e:
+            _log.error(f"Error loading data from {self.file_path}: {e}")
+            return None
+        
+    @property
+    def file(self):
+        return self._root_file
+
+    def read_info(self, info_id: Optional[str] = 'info') -> Optional[Dict]:
+        """Load processing information from a ROOT file as a Python dictionary.
+
+        Args:
+            info_name (str, optional): path to the TNamed info object. Defaults to 'triggerana/info'.
+        """
+            
+        info_obj = self._root_file[f"{self.analyzer_dir}/{info_id}"]
+        return json.loads(info_obj.members['fTitle'])
+
+
+    def read_tree(self, tree_name: str) -> Optional[TriggerTree]:
+        """Open a TTree from the analyzer directory and return it as a :class:`TriggerTree`.
+
+        Args:
+            tree_name (str): name of the tree inside ``analyzer_dir``
+                (e.g. ``'tptree'`` resolves to ``'triggerAna/tptree'``).
+
+        Returns:
+            :class:`TriggerTree` wrapping the requested uproot TTree.
+
+        Raises:
+            TypeError: if the object at the resolved path is not a TTree.
+        """
+        # try:
+        tree_path = f"{self.analyzer_dir}/{tree_name}"
+        obj = self._root_file[tree_path]
+        if not isinstance(obj, uproot.behaviors.TTree.TTree):
+            raise TypeError(f"{tree_path} is not a TTree")
+
+        _log.info(f"{tree_path} found with {obj.num_entries} ")
+
+        return TriggerTree(obj)
+        # except Exception as e:
+            # _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
+            # raise e
+        
+
+    def read_tree_old(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """Load an uproot TTree into a DataFrame.
+
+        Args:
+            tree_name: name or path of the tree in the ROOT file
+            trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
+            cut (str, optional): uproot cut expression to filter rows. Defaults to None.
+            branch_names (list, optional): branches to load. Defaults to None (all branches).
+
+        Returns:
+            pd.DataFrame or None on error.
+        """
+        try:
+            tree_path = f"{self.analyzer_dir}/{tree_name}"
+            tree = self._root_file[tree_path]
+            _log.info(f"{tree_path} found with {tree.num_entries} ")
+            arr = tree.arrays(branch_names, library="ak", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
+            return ak.to_dataframe(arr)
+        except Exception as e:
+            _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
+            return None
+        
+
+    def read_tree_np(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """Load an uproot TTree into a DataFrame.
+
+        Args:
+            tree_name: name or path of the tree in the ROOT file
+            trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
+            cut (str, optional): uproot cut expression to filter rows. Defaults to None.
+            branch_names (list, optional): branches to load. Defaults to None (all branches).
+
+        Returns:
+            pd.DataFrame or None on error.
+        """
+        try:
+            tree = self._root_file[f"{self.analyzer_dir}/{tree_name}"]
+            arr = tree.arrays(branch_names, library="np", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
+            df = pd.DataFrame(arr)
+            df = df.explode(list(df.select_dtypes(include='object').columns))
+
+            return df
+        except Exception as e:
+            _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
+            return None
+
+#-----
+
+
+class RawWaveformsTree:
+    """Wrapper around an uproot TTree holding raw waveform (rawdigits) data.
+
+    Handles both dense trees (every channel stored as a branch) and sparse
+    trees (only active channels stored, with an extra branch listing them).
+    The correct loading strategy is detected automatically via
+    :meth:`_find_active_channels_branch`.
+
+    Unknown attribute access is delegated to the underlying uproot tree, so
+    all standard uproot introspection (``keys()``, ``num_entries``, etc.) works
+    directly on this object.
+
+    Args:
+        tree: open uproot TTree object for raw waveform data.
+    """
+
+    def __init__(self, tree):
+        self._tree = tree
+
+    def __getattr__(self, name):
+        # Delegate all unknown attributes to the wrapped tree
+        return getattr(self._tree, name)
+
+    def to_df(self, ev: int):
+        """Load waveform data for a given event into a pandas DataFrame.
+
+        Dispatches to sparse or dense loading based on whether an
+        active-channels branch is present in the tree.
+
+        Args:
+            ev (int): event index to load (currently only ``1``, the first
+                event, is supported).
+
+        Returns:
+            pd.DataFrame with columns ``[event, run, subrun, <channel_ids>,
+            sample_id]``, one row per ADC sample.
+        """
+        if (self._find_active_channels_branch()):
+            df_wf = self._load_sparse_waveform_data(ev)
+        else:
+            df_wf = self._load_waveform_data(ev)
+
+        return df_wf
+    
+    def _find_active_channels_branch(self) -> Optional[str]:
+        """Return the name of the active-channels branch in a sparse waveform tree, or None."""
+        for name in ['active_channels', 'chans_with_electrons']:
+            if name in self._tree.keys():
+                return name
+        return None
+    
+    def _load_waveform_data(self, ev_sel: Union[int, list] = 1):
+        """Load waveform data for specified channels from a ROOT file into a pandas DataFrame."""
+
+        if not (type(ev_sel) == int and ev_sel == 1):
+            raise RuntimeError("Only the loading of the first event is supported")
+
+        chans = [o.name for o in self._tree.branches if o.name not in ['event', 'run', 'subrun']]
+        _log.debug(f"found {len(chans)} channels")
+
+        _log.debug("Loading tree into np arrays")
+        arrays = self._tree.arrays(library='np')
+        _log.debug("Done loading tree into np arrays")
+
+        _log.debug("Converting np arrays to dataframe")
+        df = pd.DataFrame(arrays)
+        _log.debug("Done converting np arrays to dataframe")
+
+        df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
+
+        _log.debug("Expanding waveforms")
+        df_waveforms = df.explode(chans)
+        _log.debug("Done expanding waveforms")
+
+        df_waveforms = df_waveforms.astype({c: 'uint16' for c in chans})
+        df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
+
+        return df_waveforms
+
+
+    def _load_sparse_waveform_data(self, ev_sel: Union[int, list] = 1) -> Optional[pd.DataFrame]:
+        """Load sparse rawdigits waveforms for a specific event.
+
+        Only channels listed in the active-channels branch are loaded. Currently
+        only the first event (ev_sel=1) is supported.
+
+        Args:
+            ev_sel: event selection (only first event currently supported).
+
+        Returns:
+            pd.DataFrame with columns [event, run, subrun, <channel_ids>, sample_id], or None on error.
+        """
+        try:
+            activ_chans_branch = self._find_active_channels_branch()
+            if activ_chans_branch is None:
+                raise RuntimeError(
+                    "Active channel branch not found in tree. "
+                    "This doesn't look like a sparse waveform tree."
+                )
+
+            branches = ["event", "run", "subrun", activ_chans_branch]
+            df_evs = self._tree.arrays(branches, library='np')
+            df_evs = pd.DataFrame(df_evs)
+
+            if not (type(ev_sel) == int and ev_sel == 1):
+                raise RuntimeError("Only the loading of the first event is supported")
+
+            ev_num = df_evs.event[0]
+            chans = list(df_evs[df_evs.event == ev_num][activ_chans_branch][0])
+            _log.debug(f"Found {len(chans)} active channels")
+
+            _log.debug("Loading tree into numpy arrays")
+            arrays = self._tree.arrays(["event", "run", "subrun"] + [str(c) for c in chans], library='np')
+            _log.debug("Converting to DataFrame")
+            df = pd.DataFrame(arrays)
+
+            df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
+
+            _log.debug("Expanding waveforms")
+            df_waveforms = df.explode(chans)
+            df_waveforms = df_waveforms.astype({c: 'uint16' for c in chans})
+            df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
+
+            return df_waveforms
+
+        except Exception as e:
+            _log.error(f"Error loading sparse waveform data: {e}")
+            return None
+
+
+    
+
+class RawWaveformsNtupleReader(TriggerNtupleReader):
+
+    def __init__(self, file_path, analyzer_dir = 'triggerana'):
+        super().__init__(file_path, analyzer_dir)
+
+    
+
+#-----
+
 
 
 def find_active_channels_branch(tree) -> Optional[str]:
@@ -37,70 +348,48 @@ def find_active_channels_branch(tree) -> Optional[str]:
     return None
 
 
-def read_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: Optional[list] = None, max_events=None) -> Optional[pd.DataFrame]:
-    """Load data from a ROOT tree into a DataFrame after expanding vectors into rows.
+# def read_data(file_path: str, tree_name: str = 'triggerana/tree', branch_names: Optional[list] = None, max_events=None) -> Optional[pd.DataFrame]:
+#     """Load data from a ROOT tree into a DataFrame after expanding vectors into rows.
 
-    Args:
-        file_path (str): path to the ROOT file containing the ROOT tree
-        tree_name (str): name or path of the tree in the ROOT file
-        branch_names (list, optional): branches to import. Defaults to None (all).
-        max_events (int, optional): maximum number of events. Defaults to None.
+#     Args:
+#         file_path (str): path to the ROOT file containing the ROOT tree
+#         tree_name (str): name or path of the tree in the ROOT file
+#         branch_names (list, optional): branches to import. Defaults to None (all).
+#         max_events (int, optional): maximum number of events. Defaults to None.
 
-    Returns:
-        pd.DataFrame or None on error.
-    """
-    if not _is_readable_file(file_path):
-        _log.error(f"File is missing or unreadable: {file_path}")
-        return None
-    try:
-        with uproot.open(f'{file_path}:{tree_name}') as tree:
-            arr = tree.arrays(branch_names, library="ak", entry_stop=max_events)
-            return ak.to_dataframe(arr)
-    except Exception as e:
-        _log.error(f"Error loading data from {file_path}: {e}")
-        return None
+#     Returns:
+#         pd.DataFrame or None on error.
+#     """
+#     _check_file_path(Path(file_path))
 
-
-def read_info(file_path: str, info_name: str = 'triggerana/info') -> Optional[Dict]:
-    """Load processing information from a ROOT file as a Python dictionary.
-
-    Args:
-        file_path (str): path to the ROOT file
-        info_name (str, optional): path to the TNamed info object. Defaults to 'triggerana/info'.
-
-    Returns:
-        dict or None on error.
-    """
-    if not _is_readable_file(file_path):
-        _log.error(f"File is missing or unreadable: {file_path}")
-        return None
-    try:
-        with uproot.open(f'{file_path}:{info_name}') as meta_data:
-            return json.loads(meta_data.members['fTitle'])
-    except Exception as e:
-        _log.error(f"Error loading info from {file_path}: {e}")
-        return None
+#     try:
+#         with uproot.open(f'{file_path}:{tree_name}') as tree:
+#             arr = tree.arrays(branch_names, library="ak", entry_stop=max_events)
+#             return ak.to_dataframe(arr)
+#     except Exception as e:
+#         _log.error(f"Error loading data from {file_path}: {e}")
+#         return None
 
 
-def read_event_list(file_path: str, tree_name: str) -> Optional[pd.DataFrame]:
-    """Load the event/run/subrun index from a ROOT tree.
 
-    Args:
-        file_path (str): path to the ROOT file
-        tree_name (str): name or path of the tree
+# def read_event_list(file_path: str, tree_name: str) -> Optional[pd.DataFrame]:
+#     """Load the event/run/subrun index from a ROOT tree.
 
-    Returns:
-        pd.DataFrame with columns [event, run, subrun], or None on error.
-    """
-    if not _is_readable_file(file_path):
-        _log.error(f"File is missing or unreadable: {file_path}")
-        return None
-    try:
-        with uproot.open(f'{file_path}:{tree_name}') as tree:
-            return tree.arrays(["event", "run", "subrun"], library='pd')
-    except Exception as e:
-        _log.error(f"Error loading event list from {file_path}: {e}")
-        return None
+#     Args:
+#         file_path (str): path to the ROOT file
+#         tree_name (str): name or path of the tree
+
+#     Returns:
+#         pd.DataFrame with columns [event, run, subrun], or None on error.
+#     """
+#     _check_file_path(Path(file_path))
+
+#     try:
+#         with uproot.open(f'{file_path}:{tree_name}') as tree:
+#             return tree.arrays(["event", "run", "subrun"], library='pd')
+#     except Exception as e:
+#         _log.error(f"Error loading event list from {file_path}: {e}")
+#         return None
 
 
 def read_sparse_waveforms(file_path: str, tree_name: str = 'triggerana/rawdigis_tree', ev_sel: Union[int, list] = 1) -> Optional[pd.DataFrame]:
@@ -117,9 +406,8 @@ def read_sparse_waveforms(file_path: str, tree_name: str = 'triggerana/rawdigis_
     Returns:
         pd.DataFrame with columns [event, run, subrun, <channel_ids>, sample_id], or None on error.
     """
-    if not _is_readable_file(file_path):
-        _log.error(f"File is missing or unreadable: {file_path}")
-        return None
+    _check_file_path(Path(file_path))
+
     try:
         with uproot.open(f'{file_path}:{tree_name}') as tree:
 

@@ -441,7 +441,7 @@ def cli(tp_file_path, wf_file_path, output_dir, first_entry, last_entry, make_fi
             'wf_file_path': wf_file_path,
             'ws_info': ws.info,
             'mc_generator_labels': list(ws.mctruth_blocks_map.values()),
-            'tpg_info': ws.info['tpg'][ws.tp_maker_name],
+            'tpg_info': ws.info['tpg']['tool'],
             'event_begin': int(min(events)),
             'event_end': int(max(events))
         }
