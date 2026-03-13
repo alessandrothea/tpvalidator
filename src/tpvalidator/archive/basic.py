@@ -26,7 +26,7 @@ def load_info(data_path: Path) -> dict:
     """Load processing info from a ROOT file (compatibility shim for archive code)."""
     from ..rootio import TriggerNtupleReader
     reader = TriggerNtupleReader(str(data_path), analyzer_dir='triggerana')
-    return reader.read_info()
+    return reader.get_info()
 
 
 def equalize_ranges(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,11 +50,11 @@ class BasicTPData:
         self.data_path = data_path
 
         tnr = TriggerNtupleReader(data_path, analyzer_dir='triggerana')
-        self.info = tnr.read_info()
+        self.info = tnr.get_info()
 
-        self.tps = tnr.read_tree('tree').to_df(branches=TP_BRANCHES)
-        self.mc = tnr.read_tree('tree').to_df(branches=MC_BRANCHES)
-        self.ides = tnr.read_tree('qtree').to_df()
+        self.tps = tnr.get_tree('tree').to_df(branches=TP_BRANCHES)
+        self.mc = tnr.get_tree('tree').to_df(branches=MC_BRANCHES)
+        self.ides = tnr.get_tree('qtree').to_df()
         # self.info = load_info(data_path)
 
         # self.tps = load_data(data_path, tree_name='triggerana/tree', branch_names=TP_BRANCHES)
