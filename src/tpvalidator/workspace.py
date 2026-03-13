@@ -9,7 +9,7 @@ import awkward as ak
 from rich import print
 from typing import Tuple, Optional, Union, Sequence, Dict
 
-from .rootio import TriggerNtupleReader, RawWaveformsNtupleReader, find_active_channels_branch, read_sparse_waveforms
+from .rootio import TriggerNtupleReader, RawWaveformsNtupleReader
 
 
 class TrgDataFrame(pd.DataFrame):
@@ -132,7 +132,7 @@ class TriggerPrimitivesWorkspace:
         self._mctruth_blocks = None
 
         # Initialize trees
-        self._do_init_2g(tps_key)
+        self._do_init(tps_key)
 
         self._extra_info.update({
             'num_events': self.num_events,
@@ -144,7 +144,7 @@ class TriggerPrimitivesWorkspace:
     ###---- 2g stuff here
 
 
-    def _do_init_2g(self, tps_key: str):
+    def _do_init(self, tps_key: str):
 
         self._log.info("Opening Trigger NTuple file")
         self._tuple_rdr = TriggerNtupleReader(self._data_path, analyzer_dir=self._analyzer_name)
@@ -199,66 +199,6 @@ class TriggerPrimitivesWorkspace:
         else:
             self._log.info(f"No {self._tps_folder} folder found")
 
-    ###
-
-
-    # def _do_init(self, tps_key: str):
-
-    #     self._log.info("Opening Trigger NTuple file")
-
-    #     with uproot.open(self._data_path) as f:
-
-    #         self._log.debug(f.keys())
-    #         self._log.info("Adding processing info")
-    #         self.info = self._get_infos(f, self._info_name)
-
-    #         tree_names = [
-    #             'event_summary',
-    #             'mctruths',
-    #             'mcneutrinos',
-    #             'mcparticles',
-    #             'simides'
-    #         ]
-
-    #         for t in tree_names:
-    #             self._log.info(f"Adding '{t}' data")
-    #             ttree_name = getattr(self, f'_{t}_tree_name')
-
-    #             try:
-    #                 ttree = f[ttree_name]
-    #                 self._log.info(f"{ttree_name} found with {ttree.num_entries} rows")
-    #             except uproot.KeyInFileError:
-    #                 self._log.warning(f"Key '{ttree_name}' not found in file.")
-    #                 ttree = None
-    #             setattr(self, f'{t}_tree', ttree)
-
-    #         # Add trigger primitives
-    #         if self._tps_folder in f[f'{self._analyzer_name}']:
-
-    #             tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
-    #             if tps_key:
-    #                 logging.info(f'Loading {tps_key}')
-    #                 self.tps_tree = tp_trees_folder[tps_key]
-    #                 self._tps_tree_name = tps_key
-    #             else:
-    #                 match len(tp_trees_folder.keys(cycle=False)):
-    #                     case 0:
-    #                         self.tps_tree = None
-    #                     case 1:
-    #                         self._tps_tree_name = tp_trees_folder.keys(cycle=False)[0]
-    #                         logging.info(f'Loading {self._tps_tree_name}')
-    #                         self.tps_tree = tp_trees_folder[self._tps_tree_name]
-    #                     case _:
-    #                         raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
-
-    #             self._log.info(f"{self._tps_tree_name} found with {self.tps_tree.num_entries} rows")
-    #         else:
-    #             self._log.info(f"No {self._tps_folder} folder found")
-
-
-    # def _get_infos(self, tfile, info_path) -> Dict:
-    #     named_info = tfile[info_path]
-    #     return json.loads(named_info.members['fTitle'])
 
 
     @staticmethod
