@@ -377,20 +377,25 @@ class RawWaveformsTree:
 
             ev_num = df_evs.event[0]
             chans = list(df_evs[df_evs.event == ev_num][activ_chans_branch][0])
-            print(f">>> Found {len(chans)} active channels")
+            _log.debug(f"found {len(chans)} channels")
 
-            print(">>> Loading tree into numpy arrays")
+            _log.debug("Loading tree into np arrays")
             arrays = self._tree.arrays(["event", "run", "subrun"] + [str(c) for c in chans], library='np')
+            _log.debug("Done loading tree into np arrays")
 
             # Convert channel column names to integer
             for c in chans:
                 arrays[int(c)] = arrays.pop(str(c))
 
+            _log.debug("Converting np arrays to dataframe")
             # Build dataframe
             df = pd.DataFrame(arrays)
+            _log.debug("Done converting np arrays to dataframe")
 
             # Flatten dataframe structure
+            _log.debug("Expanding waveforms")
             df = df.explode([int(c) for c in chans])
+            _log.debug("Done expanding waveforms")
 
             # Add the sample id
             df['sample_id'] = np.arange(0, len(df))
