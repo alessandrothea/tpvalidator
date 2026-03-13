@@ -13,10 +13,15 @@ from rich import print
 _log = logging.getLogger(__name__)
 
 
+class DatasetEntry(BaseModel):
+    trg_file: str
+    rawadc_file: Optional[str] = None
+
+
 class DatasetsConfig(BaseModel):
     dataset_path: str
     dataset_info: dict
-    datasets_spec: dict[str, str]
+    datasets_spec: dict[str, DatasetEntry]
     tp_cut: Optional[str] = None
     tp_info_update: Optional[dict] = None
 
@@ -54,9 +59,12 @@ def load(dataset_dir: str):
 
     dataset_path = dataset_dir / cfg.dataset_path
     datasets = {}
-    for name, filename in cfg.datasets_spec.items():
-        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / filename, extra_info=cfg.dataset_info)
-        print(f"Dataset '{name}': {ws.num_events} events")
+    for name, entry in cfg.datasets_spec.items():
+        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file, extra_info=cfg.dataset_info)
+        if entry.rawadc_file:
+            print(f"Adding {entry.rawadc_file}")
+            ws.add_rawdigits(str(dataset_path / entry.rawadc_file))
+        print(f"Dataset '{name}': {ws.num_entries} events")
         print(ws.info)
         datasets[name] = ws
 

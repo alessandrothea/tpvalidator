@@ -288,9 +288,9 @@ class RawWaveformsTree:
             sample_id]``, one row per ADC sample.
         """
         if (self._find_active_channels_branch()):
-            df_wf = self._load_sparse_waveform_data(ev)
+            df_wf = self._load_sparse_rawadc_data(ev)
         else:
-            df_wf = self._load_waveform_data(ev)
+            df_wf = self._load_dense_rawadc_data(ev)
 
         return df_wf
     
@@ -301,7 +301,7 @@ class RawWaveformsTree:
                 return name
         return None
     
-    def _load_waveform_data(self, ev_sel: Union[int, list] = 1):
+    def _load_dense_rawadc_data(self, ev_sel: Union[int, list] = 1):
         """Load dense waveform data for all channels into a pandas DataFrame.
 
         Reads every branch that is not ``event``, ``run``, or ``subrun`` as a
@@ -335,16 +335,16 @@ class RawWaveformsTree:
         df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
 
         _log.debug("Expanding waveforms")
-        df_waveforms = df.explode(chans)
+        df_rawadc = df.explode(chans)
         _log.debug("Done expanding waveforms")
 
-        df_waveforms = df_waveforms.astype({c: 'uint16' for c in chans})
-        df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
+        df_rawadc = df_rawadc.astype({c: 'uint16' for c in chans})
+        df_rawadc['sample_id'] = np.arange(0, len(df_rawadc))
 
-        return df_waveforms
+        return df_rawadc
 
 
-    def _load_sparse_waveform_data(self, ev_sel: Union[int, list] = 1) -> Optional[pd.DataFrame]:
+    def _load_sparse_rawadc_data(self, ev_sel: Union[int, list] = 1) -> Optional[pd.DataFrame]:
         """Load sparse waveform data, reading only channels listed in the active-channels branch.
 
         Reads the active-channels branch to determine which channel branches to

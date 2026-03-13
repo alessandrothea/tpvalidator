@@ -84,7 +84,7 @@ class TriggerAnalysisWorkspace:
 
 class TriggerPrimitivesWorkspace:
     """Workspace for loading MC production TP files (trigger primitives,
-    MC truth, neutrinos, particles, IDEs, waveforms).
+    MC truth, neutrinos, particles, IDEs, rawadcs).
     """
 
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
@@ -123,9 +123,9 @@ class TriggerPrimitivesWorkspace:
         self._simides = None
         self._tps = None
 
-        # Waveforms registry
+        # RawADCs registry
         self.rawdigis_events = []
-        self._waveforms = {}
+        self._rawadcs = {}
 
         # Ancillary information
         self._event_list = None
@@ -135,7 +135,7 @@ class TriggerPrimitivesWorkspace:
         self._do_init(tps_key)
 
         self._extra_info.update({
-            'num_events': self.num_events,
+            'num_entries': self.num_entries,
             'event_list': self.event_list,
         })
 
@@ -302,7 +302,7 @@ class TriggerPrimitivesWorkspace:
     # Workspace properties
     #
     @property
-    def num_events(self) -> int:
+    def num_entries(self) -> int:
         """Number of events in the workspace, based on the event_summary tree."""
         return len(self.event_list)
 
@@ -322,7 +322,7 @@ class TriggerPrimitivesWorkspace:
     # Support for raw dataforms loading
     #
     def add_rawdigits(self, data_path: str):
-        """Add a rawdigits (waveforms) file to the workspace."""
+        """Add a rawdigits (rawadcs) file to the workspace."""
         # self._rawdigits_path = data_path
 
         self._raw_tuple_rdr = RawWaveformsNtupleReader(data_path)
@@ -344,15 +344,15 @@ class TriggerPrimitivesWorkspace:
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
 
-    def get_waveforms(self, ev: int) -> pd.DataFrame:
+    def get_rawadcs(self, ev: int) -> pd.DataFrame:
         if not ev in self.rawdigis_events:
-            self._log.warning(f"Waveforms for event {ev} are not available")
+            self._log.warning(f"RawADCs for event {ev} are not available")
             return None
 
         else:
-            if ev in self._waveforms:
-                return self._waveforms[ev] 
+            if ev in self._rawadcs:
+                return self._rawadcs[ev]
 
-            self._waveforms[ev] = self.rawdigits_tree.to_df(ev)
-            return self._waveforms[ev]
+            self._rawadcs[ev] = self.rawdigits_tree.to_df(ev)
+            return self._rawadcs[ev]
 
