@@ -188,14 +188,14 @@ class TriggerPrimitivesWorkspace:
                     case 0:
                         self.tps_tree = None
                     case 1:
-                        self._tps_tree_name = f'{self._tps_folder}/{tp_trees_folder.keys(cycle=False)[0]}'
-                        logging.info(f'Loading {self._tps_tree_name}')
-                        self.tps_tree = self._tuple_rdr.get_tree(f"{self._tps_tree_name}")
+                        self._tps_tree_name = f'{tp_trees_folder.keys(cycle=False)[0]}'
+                        self._tps_tree_path = f'{self._tps_folder}/{self._tps_tree_name}'
+                        logging.info(f'Loading {self._tps_tree_path}')
+                        self.tps_tree = self._tuple_rdr.get_tree(f"{self._tps_tree_path}")
                     case _:
                         raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
 
             self._log.info(f"{self._tps_tree_name} found")
-            print(f"{self._tps_tree_name} found")
         else:
             self._log.info(f"No {self._tps_folder} folder found")
 
@@ -269,10 +269,10 @@ class TriggerPrimitivesWorkspace:
 
 
     @property
-    def ides(self):
+    def simides(self):
         if self._simides is None:
             self._log.debug("Loading IDEs dataset")
-            self._simides = self._load_dataframe_with_event_cut('ides')
+            self._simides = self._load_dataframe_with_event_cut('simides')
         return self._simides
 
 
@@ -340,27 +340,8 @@ class TriggerPrimitivesWorkspace:
                 self.rawdigits_hists[obj_name.split(';')[0]] = self._raw_tuple_rdr[k.split(';')[0]]
 
         self._log.info("Load rawdigis event list")
-        self.rawdigis_events = self.rawdigits_tree.event_list().event
+        self.rawdigis_events = self.rawdigits_tree.event_list().event.tolist()
         self._log.info(f"{len(self.rawdigis_events)} events found")
-
-
-    # def add_rawdigits_old(self, data_path: str):
-    #     """Add a rawdigits (waveforms) file to the workspace."""
-    #     self._rawdigits_path = data_path
-
-    #     with uproot.open(self._rawdigits_path) as f:
-    #         self._log.info("Loading rawADC tree")
-    #         self.rawdigits_tree = f[self._rawdigits_tree_name]
-
-    #         self.rawdigits_hists = {}
-    #         for k in f.keys(cycle=False):
-    #             obj_name = k.split('/')[-1]
-    #             self._log.info("Retrieving rawADC histograms")
-
-    #             if obj_name.startswith('ADCsPlane') or obj_name.startswith('ADCsNoisePlane'):
-    #                 self.rawdigits_hists[obj_name.split(';')[0]] = f[k.split(';')[0]]
-
-    #     self._load_rawdigis_event_list()
 
 
     def get_waveforms(self, ev: int) -> pd.DataFrame:
@@ -372,71 +353,6 @@ class TriggerPrimitivesWorkspace:
             if ev in self._waveforms:
                 return self._waveforms[ev] 
 
-            # df_wf = self._waveforms.get(ev, None)
-
-            # if not df_wf is None:
-            #     return df_wf
-
-            # if (self._find_rawdigit_tree_active_channels_branch()):
-            #     df_wf = self._load_sparse_waveform_data(ev)
-            # else:
-            #     df_wf = self._load_waveform_data(ev)
-
             self._waveforms[ev] = self.rawdigits_tree.to_df(ev)
             return self._waveforms[ev]
 
-
-    # def _load_rawdigis_event_list(self):
-    #     """_summary_
-    #     """
-    #     self._log.info("Load rawdigis event list")
-    #     self.rawdigis_events = self._get_event_id_list(self.rawdigits_tree)
-    #     self._log.info(f"{len(self.rawdigis_events)} events found")
-
-
-    # def _load_waveform_data(self, ev_sel: Union[int, list] = 1):
-    #     """Load waveform data for specified channels from a ROOT file into a pandas DataFrame."""
-    #     try:
-    #         with uproot.open(f'{self._rawdigits_path}:{self._rawdigits_tree_name}') as tree:
-
-    #             branches = ["event", "run", "subrun"]
-
-    #             df_evs = tree.arrays(branches, library='pd')
-
-    #             if not (type(ev_sel) == int and ev_sel == 1):
-    #                 raise RuntimeError("Only the loading of the first event is supported")
-
-    #             ev_num = df_evs.event[0]
-    #             chans = [o.name for o in tree.branches if o.name not in ['event', 'run', 'subrun']]
-    #             self._log.debug(f"found {len(chans)} channels")
-
-    #             self._log.debug("Loading tree into np arrays")
-    #             arrays = tree.arrays(library='np')
-    #             self._log.debug("Done loading tree into np arrays")
-
-    #             self._log.debug("Converting np arrays to dataframe")
-    #             df = pd.DataFrame(arrays)
-    #             self._log.debug("Done converting np arrays to dataframe")
-
-    #             df.columns = [int(c) if c not in ["event", "run", "subrun"] else c for c in df.columns]
-
-    #             self._log.debug("Expanding waveforms")
-    #             df_waveforms = df.explode(chans)
-    #             self._log.debug("Done expanding waveforms")
-
-    #             df_waveforms = df_waveforms.astype({c: 'uint16' for c in chans})
-    #             df_waveforms['sample_id'] = np.arange(0, len(df_waveforms))
-
-    #             return df_waveforms
-
-    #     except Exception as e:
-    #         print(f"Error loading sparse waveform data data from {self._rawdigits_path}: {e}")
-    #         return None
-
-
-    # def _find_rawdigit_tree_active_channels_branch(self):
-    #     return find_active_channels_branch(self.rawdigits_tree)
-
-    # def _load_sparse_waveform_data(self, ev_sel: Union[int, list] = 1):
-    #     """Load sparse rawdigits waveforms for a specific event from a ROOT file."""
-    #     return read_sparse_waveforms(self._rawdigits_path, self._rawdigits_tree_name, ev_sel)

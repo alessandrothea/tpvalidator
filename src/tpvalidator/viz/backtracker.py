@@ -11,7 +11,7 @@ from rich import print
 class BackTrackerPlotter:
     def __init__(self, ws: TriggerPrimitivesWorkspace, ev_num: int):
 
-        if ws.ides is None:
+        if ws.simides is None:
             raise RuntimeError(f"No IDE data available in '{ws._data_path}'")
 
         self.ev_num = ev_num
@@ -19,7 +19,7 @@ class BackTrackerPlotter:
 
         self.inspect_tps = self.ws.tps[(self.ws.tps.event == ev_num)]
         # Focus on ides from this event only
-        self.event_ides = self.ws.ides[self.ws.ides.event == ev_num]
+        self.event_ides = self.ws.simides[self.ws.simides.event == ev_num]
 
         self.tpg_info = ws.info['tpg'][ws.tp_maker_name]
         self.tp_thresholds = [self.tpg_info[f'threshold_tpg_plane{i}'] for i in range(3)]
@@ -27,7 +27,7 @@ class BackTrackerPlotter:
 
         self.waveforms = self.ws.get_waveforms(ev_num)
         if self.waveforms is None:
-            print(f"[yellow]Warning: no waveform data found in {self.ws._rawdigits_path} for event {ev_num}[/yellow]")
+            print(f"[yellow]Warning: no waveform data found in workspace for event {ev_num}[/yellow]")
 
 
     def plot_tps_vs_ides(self, tps: Union[List[int], pd.DataFrame], layout: str = 'grid', figsize=(10, 10)):
