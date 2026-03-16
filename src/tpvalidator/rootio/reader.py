@@ -10,11 +10,11 @@ from typing import Optional, Union, Dict
 _log = logging.getLogger(__name__)
 
 def _check_file_path(file_path: Path) -> None:
-        if not file_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
-        if not file_path.is_file():
-            raise ValueError(f"Path is not a file: {file_path}")
-       
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if not file_path.is_file():
+        raise ValueError(f"Path is not a file: {file_path}")
+
 
 class NtupleReader:
     """Base class providing ROOT file I/O and path resolution for ntuple readers.
@@ -49,8 +49,13 @@ class NtupleReader:
         self._open_file()
 
     def __getattr__(self, name):
-        return getattr(self._root_file, name)
-    
+        root_file = self.__dict__.get("_root_file")
+        if root_file is None:
+            raise RuntimeError(
+                f"ROOT file is not open (failed to open '{self.__dict__.get('file_path')}')"
+            )
+        return getattr(root_file, name)
+
     def __getitem__(self, key):
         return self._root_file.__getitem__(key)
 
@@ -59,6 +64,15 @@ class NtupleReader:
             self._root_file = uproot.open(self.file_path)
         except Exception as e:
             _log.error(f"Error loading data from {self.file_path}: {e}")
+            raise
+
+    def __enter__(self) -> "NtupleReader":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        if self._root_file is not None:
+            self._root_file.close()
+            self._root_file = None
 
     @property
     def file(self):
@@ -140,9 +154,9 @@ class TriggerTree:
             library="ak"
         )
         return ak.to_dataframe(arr)
-    
-    def to_df_np(self, branches=None, entry_start=None, entry_stop=None):
-        """Read branches into a pandas DataFrame via numumpy-array.
+
+    def to_df_np(self, branches=None, entry_start=None, entry_stop=None, cut=None):
+        """Read branches into a pandas DataFrame via numpy-array.
 
         Args:
             branches (list, optional): branch names to load. Defaults to
@@ -151,10 +165,12 @@ class TriggerTree:
                 to ``None`` (beginning of tree).
             entry_stop (int, optional): one-past-last entry index to read.
                 Defaults to ``None`` (end of tree).
+            cut (str, optional): uproot cut expression to filter rows.
+                Defaults to ``None``.
 
         Returns:
             pd.DataFrame with one row per entry (or per element for
-            variable-length branches after awkward flattening).
+            variable-length branches after numpy exploding).
         """
         arr = self._tree.arrays(branches, library="np", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
         df = pd.DataFrame(arr)
@@ -272,7 +288,7 @@ class RawWaveformsTree:
         # Delegate all unknown attributes to the wrapped tree
         return getattr(self._tree, name)
 
-    def event_list(self):    
+    def event_list(self):
         return self._tree.arrays(['event', 'run', 'subrun'], library='pd').drop_duplicates()
 
 
@@ -296,14 +312,14 @@ class RawWaveformsTree:
             df_wf = self._load_dense_rawadc_data(ev)
 
         return df_wf
-    
+
     def _find_active_channels_branch(self) -> Optional[str]:
         """Return the name of the active-channels branch in a sparse waveform tree, or None."""
         for name in ['active_channels', 'chans_with_electrons']:
             if name in self._tree.keys():
                 return name
         return None
-    
+
     def _load_dense_rawadc_data(self, ev_sel: Union[int, list] = 1):
         """Load dense waveform data for all channels into a pandas DataFrame.
 
@@ -406,7 +422,7 @@ class RawWaveformsTree:
             # Change channel column types to unsigned ints
             obj_cols = df.select_dtypes(include='object').columns
             df[obj_cols] = df[obj_cols].astype('uint16')
-           
+
             return df
 
         except Exception as e:
@@ -414,7 +430,7 @@ class RawWaveformsTree:
             return None
 
 
-    
+
 
 class RawWaveformsNtupleReader(NtupleReader):
     """Reader for ROOT files containing raw waveform (rawdigits) trees.
@@ -435,6 +451,3 @@ class RawWaveformsNtupleReader(NtupleReader):
         super().__init__(file_path, analyzer_dir)
 
 #-----
-
-
-
