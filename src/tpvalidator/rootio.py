@@ -23,9 +23,8 @@ class NtupleReader:
     property, and delegates unknown attribute access to the underlying uproot
     file object (so ``reader.keys()``, etc. work directly).
 
-    Subclasses add domain-specific methods (e.g. :meth:`get_info` for trigger
-    ntuples) and override :meth:`get_tree` to return the appropriate tree
-    wrapper.
+    Subclasses declare a :attr:`tree_class` attribute to specify which Tree
+    wrapper class :meth:`get_tree` should return.
 
     Args:
         file_path (str): path to the ROOT file.
@@ -36,6 +35,8 @@ class NtupleReader:
         file_path (str): path of the opened ROOT file.
         analyzer_dir (str): directory prefix used when resolving object paths.
     """
+
+    tree_class = None
 
     def __init__(self, file_path: str, analyzer_dir: str):
         path = Path(file_path)
@@ -82,6 +83,21 @@ class NtupleReader:
         _log.info(f"{tree_path} found with {obj.num_entries} entries")
         return obj
 
+    def get_tree(self, tree_name: str):
+        """Open a TTree from the analyzer directory and return it wrapped in :attr:`tree_class`.
+
+        Args:
+            tree_name (str): name of the tree inside ``analyzer_dir``.
+
+        Returns:
+            An instance of :attr:`tree_class` wrapping the requested uproot TTree.
+
+        Raises:
+            TypeError: if the object at the resolved path is not a TTree.
+        """
+        if self.tree_class is None:
+            raise NotImplementedError("Subclasses must define tree_class")
+        return self.tree_class(self._get_tree_obj(tree_name))
 
 
 class TriggerTree:
@@ -167,6 +183,8 @@ class TriggerNtupleReader(NtupleReader):
         df     = tree.to_df(branches=["event", "run", "subrun"])
     """
 
+    tree_class = TriggerTree
+
     def __init__(self, file_path: str, analyzer_dir: str = 'triggerAna'):
         super().__init__(file_path, analyzer_dir)
 
@@ -182,21 +200,6 @@ class TriggerNtupleReader(NtupleReader):
         """
         info_obj = self._root_file[f"{self.analyzer_dir}/{info_id}"]
         return json.loads(info_obj.members['fTitle'])
-
-    def get_tree(self, tree_name: str) -> TriggerTree:
-        """Open a TTree from the analyzer directory and return it as a :class:`TriggerTree`.
-
-        Args:
-            tree_name (str): name of the tree inside ``analyzer_dir``
-                (e.g. ``'tptree'`` resolves to ``'triggerAna/tptree'``).
-
-        Returns:
-            :class:`TriggerTree` wrapping the requested uproot TTree.
-
-        Raises:
-            TypeError: if the object at the resolved path is not a TTree.
-        """
-        return TriggerTree(self._get_tree_obj(tree_name))
 
     def read_tree_old(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
         """Load an uproot TTree into a DataFrame.
@@ -426,23 +429,10 @@ class RawWaveformsNtupleReader(NtupleReader):
             Defaults to ``'triggerana'``.
     """
 
+    tree_class = RawWaveformsTree
+
     def __init__(self, file_path: str, analyzer_dir: str = 'triggerana'):
         super().__init__(file_path, analyzer_dir)
-
-    def get_tree(self, tree_name: str) -> RawWaveformsTree:
-        """Open a TTree from the analyzer directory and return it as a :class:`RawWaveformsTree`.
-
-        Args:
-            tree_name (str): name of the tree inside ``analyzer_dir``
-                (e.g. ``'rawdigis_tree'`` resolves to ``'triggerana/rawdigis_tree'``).
-
-        Returns:
-            :class:`RawWaveformsTree` wrapping the requested uproot TTree.
-
-        Raises:
-            TypeError: if the object at the resolved path is not a TTree.
-        """
-        return RawWaveformsTree(self._get_tree_obj(tree_name))
 
 #-----
 
