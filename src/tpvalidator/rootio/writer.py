@@ -61,16 +61,26 @@ def _infer_dtype(series: pd.Series) -> str:
 # ---------------------------------------------------------------------------
 
 class NtupleWriter:
-    """Write a pandas DataFrame to a ROOT TTree, splitting rows into events.
+    """Write one or more pandas DataFrames into ROOT TTrees in a single file.
+
+    The file path and open mode are fixed at construction time.  The file is
+    opened lazily on the first :meth:`write` or :meth:`extend` call so that
+    no empty file is created if the writer is never used.
 
     Parameters
     ----------
+    path:
+        Destination ``.root`` file path.
     key_columns:
         Column names used as the groupby key.  Each unique combination of
         values defines one *event*.  These columns are stored as **scalar**
         branches (one value per event).
     tree_name:
-        Name of the TTree inside the ROOT file.  Defaults to ``"Events"``.
+        Default TTree name used when no per-call ``tree_name`` is supplied.
+        Defaults to ``"Events"``.
+    mode:
+        ``"recreate"`` *(default)* – overwrite any existing file.
+        ``"update"`` – open an existing file and add new trees to it.
     compression:
         uproot compression object (e.g. ``uproot.ZLIB(4)``, ``uproot.LZ4(4)``,
         ``uproot.ZSTD(5)``, or ``None`` for uncompressed).
@@ -82,121 +92,116 @@ class NtupleWriter:
 
     Examples
     --------
-    One-shot write::
+    Streaming write, multiple trees (context manager)::
 
-        writer = NtupleWriter(key_columns=["run", "lumi", "event"])
-        writer.write(df, "output.root")
+        with NtupleWriter("out.root", key_columns=["run", "event"]) as w:
+            for tp_batch, hit_batch in batches:
+                w.extend(tp_batch,  tree_name="TrigPrim")
+                w.extend(hit_batch, tree_name="Hits")
 
-    Streaming / multi-batch write (context manager)::
+    One-shot writes into the same file::
 
-        with NtupleWriter(["run", "event"]).open("out.root") as w:
+        writer = NtupleWriter("out.root", key_columns=["run", "event"])
+        writer.write(tp_df,  tree_name="TrigPrim")
+        writer.write(hit_df, tree_name="Hits")
+        writer.close()
+
+    Single-tree (default ``tree_name="Events"``)::
+
+        with NtupleWriter("out.root", key_columns=["run", "event"]) as w:
             for batch in batches:
                 w.extend(batch)
     """
 
     def __init__(
         self,
+        path: str | Path,
         key_columns: Sequence[str],
         tree_name: str = "Events",
+        mode: str = "recreate",
         compression: object = uproot.LZ4(4),
         chunk_size: int = 1_000,
     ) -> None:
         if not key_columns:
             raise ValueError("`key_columns` must not be empty.")
+        if mode not in ("recreate", "update"):
+            raise ValueError(f"mode must be 'recreate' or 'update', got {mode!r}")
 
-        self.key_columns: list[str]  = list(key_columns)
-        self.tree_name:   str        = tree_name
-        self.compression: object     = compression
-        self.chunk_size:  int        = chunk_size
+        self.path:        Path   = Path(path)
+        self.key_columns: list[str] = list(key_columns)
+        self.tree_name:   str    = tree_name
+        self.mode:        str    = mode
+        self.compression: object = compression
+        self.chunk_size:  int    = chunk_size
 
-        # Internal state – active only while used as a context manager
+        # Internal state – populated lazily on first write/extend
         self._root_file: uproot.WritableFile | None = None
-        self._tree:      object | None              = None
+        self._trees:     dict[str, object]          = {}   # name → writable tree
 
     # ------------------------------------------------------------------
     # Public API – one-shot write
     # ------------------------------------------------------------------
 
-    def write(
-        self,
-        df:   pd.DataFrame,
-        path: str | Path,
-        mode: str = "recreate",
-    ) -> None:
-        """Convert *df* to ROOT and write everything in one call.
+    def write(self, df: pd.DataFrame, tree_name: str | None = None) -> None:
+        """Convert *df* to ROOT and append it to the named TTree.
 
         Parameters
         ----------
         df:
             Input DataFrame.  Must contain every column in ``key_columns``.
-        path:
-            Destination ``.root`` file path.
-        mode:
-            ``"recreate"`` *(default)* – overwrite any existing file.
-            ``"update"`` – add a new TTree to an existing file (the tree
-            name must not already be present).
+        tree_name:
+            TTree to write into.  Defaults to ``self.tree_name``.
         """
-        if mode not in ("recreate", "update"):
-            raise ValueError(f"mode must be 'recreate' or 'update', got {mode!r}")
-
+        name = tree_name or self.tree_name
+        self._ensure_open()
         self._validate_columns(df)
         branches = self._build_branch_dict(df)
         n_events = len(next(iter(branches.values())))
 
-        opener = uproot.recreate if mode == "recreate" else uproot.update
-        with opener(str(path), compression=self.compression) as f:
-            f[self.tree_name] = branches
+        if name not in self._trees:
+            self._root_file[name] = branches
+            self._trees[name] = self._root_file[name]
+        else:
+            self._root_file[name].extend(branches)
 
         _log.info(
-            f"Wrote {n_events:,} events ({len(df):,} rows) → '{path}' / '{self.tree_name}'"
+            f"Wrote {n_events:,} events ({len(df):,} rows) → '{self.path}' / '{name}'"
         )
 
     # ------------------------------------------------------------------
-    # Public API – streaming / context-manager write
+    # Public API – streaming / incremental write
     # ------------------------------------------------------------------
 
-    def open(self, path: str | Path, mode: str = "recreate") -> "NtupleWriter":
-        """Open a ROOT file for incremental writing.
+    def extend(self, df: pd.DataFrame, tree_name: str | None = None) -> None:
+        """Append *df* (after groupby-splitting) to the named TTree.
 
-        Must be used as a context manager (or paired with :meth:`close`)::
-
-            with NtupleWriter(["run", "event"]).open("out.root") as w:
-                for batch in batches:
-                    w.extend(batch)
+        Parameters
+        ----------
+        df:
+            Input DataFrame.  Must contain every column in ``key_columns``.
+        tree_name:
+            TTree to extend.  Defaults to ``self.tree_name``.
         """
-        if mode not in ("recreate", "update"):
-            raise ValueError(f"mode must be 'recreate' or 'update', got {mode!r}")
-        opener = uproot.recreate if mode == "recreate" else uproot.update
-        self._root_file = opener(str(path), compression=self.compression)
-        self._tree      = None
-        return self
-
-    def extend(self, df: pd.DataFrame) -> None:
-        """Append *df* (after groupby-splitting) to the currently open TTree."""
-        if self._root_file is None:
-            raise RuntimeError(
-                "No file is open. Call .open() first, or use .write() for a one-shot write."
-            )
-
+        name = tree_name or self.tree_name
+        self._ensure_open()
         self._validate_columns(df)
         branches = self._build_branch_dict(df)
         n_events = len(next(iter(branches.values())))
 
-        if self._tree is None:
-            # First batch – create the TTree
-            self._root_file[self.tree_name] = branches
-            self._tree = self._root_file[self.tree_name]
+        if name not in self._trees:
+            self._root_file[name] = branches
+            self._trees[name] = self._root_file[name]
         else:
-            self._root_file[self.tree_name].extend(branches)
+            self._root_file[name].extend(branches)
 
-        _log.info(f"Appended {n_events:,} events ({len(df):,} rows)")
+        _log.info(f"Appended {n_events:,} events ({len(df):,} rows) → '{name}'")
 
     def close(self) -> None:
         """Flush and close the underlying ROOT file."""
         if self._root_file is not None:
             self._root_file.close()
             self._root_file = None
-            self._tree      = None
+            self._trees     = {}
 
     def __enter__(self) -> "NtupleWriter":
         return self
@@ -207,6 +212,12 @@ class NtupleWriter:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _ensure_open(self) -> None:
+        """Open the ROOT file on first use."""
+        if self._root_file is None:
+            opener = uproot.recreate if self.mode == "recreate" else uproot.update
+            self._root_file = opener(str(self.path), compression=self.compression)
 
     def _validate_columns(self, df: pd.DataFrame) -> None:
         missing = [c for c in self.key_columns if c not in df.columns]
@@ -265,48 +276,54 @@ if __name__ == "__main__":
     rng      = np.random.default_rng(42)
     n_events = 50
 
-    rows = [
-        {
-            "run":        1,
-            "lumi":       evt // 10 + 1,
-            "event":      evt,
-            "hit_x":      rng.uniform(-100, 100),
-            "hit_y":      rng.uniform(-100, 100),
-            "hit_charge": rng.exponential(50),
-            "hit_layer":  int(rng.integers(0, 4)),
-        }
-        for evt in range(n_events)
-        for _   in range(int(rng.integers(1, 8)))
-    ]
+    def _make_df(seed: int) -> pd.DataFrame:
+        rng2 = np.random.default_rng(seed)
+        rows = [
+            {
+                "run":        1,
+                "lumi":       evt // 10 + 1,
+                "event":      evt,
+                "hit_x":      rng2.uniform(-100, 100),
+                "hit_y":      rng2.uniform(-100, 100),
+                "hit_charge": rng2.exponential(50),
+                "hit_layer":  int(rng2.integers(0, 4)),
+            }
+            for evt in range(n_events)
+            for _   in range(int(rng2.integers(1, 8)))
+        ]
+        return pd.DataFrame(rows)
 
-    df = pd.DataFrame(rows)
-    print(f"Input DataFrame: {len(df)} rows, {df['event'].nunique()} unique events")
-    print(df.head(12).to_string(index=False))
+    tp_df  = _make_df(42)
+    hit_df = _make_df(99)
 
-    # ── one-shot write ──────────────────────────────────────────────────────
+    print(f"TrigPrim DataFrame: {len(tp_df)} rows, {tp_df['event'].nunique()} events")
+    print(f"Hits     DataFrame: {len(hit_df)} rows, {hit_df['event'].nunique()} events")
+
     with tempfile.NamedTemporaryFile(suffix=".root", delete=False) as tmp:
         out_path = tmp.name
 
-    writer = NtupleWriter(key_columns=["run", "lumi", "event"])
-    writer.write(df, out_path)
+    # ── context-manager write, two trees ────────────────────────────────────
+    with NtupleWriter(out_path, key_columns=["run", "lumi", "event"]) as w:
+        w.extend(tp_df,  tree_name="TrigPrim")
+        w.extend(hit_df, tree_name="Hits")
 
     # ── verify round-trip ───────────────────────────────────────────────────
     print("\n--- Round-trip verification ---")
     with uproot.open(out_path) as f:
-        tree   = f[writer.tree_name]
-        arrays = tree.arrays(library="ak")
-
-        print(f"TTree '{writer.tree_name}' → {tree.num_entries:,} entries")
-        print("Branches:", tree.keys())
-        print("\nFirst 3 events:")
-        for i in range(min(3, tree.num_entries)):
-            ev = {
-                k: arrays[k][i].tolist()
-                   if hasattr(arrays[k][i], "tolist")
-                   else int(arrays[k][i])
-                for k in tree.keys()
-            }
-            print(f"  event {i}: {ev}")
+        print("Trees in file:", list(f.keys()))
+        for tname in ("TrigPrim", "Hits"):
+            tree   = f[tname]
+            arrays = tree.arrays(library="ak")
+            print(f"\nTTree '{tname}' → {tree.num_entries:,} entries")
+            print("  Branches:", tree.keys())
+            for i in range(min(2, tree.num_entries)):
+                ev = {
+                    k: arrays[k][i].tolist()
+                       if hasattr(arrays[k][i], "tolist")
+                       else int(arrays[k][i])
+                    for k in tree.keys()
+                }
+                print(f"  event {i}: {ev}")
 
     os.unlink(out_path)
     print("\nDemo complete ✓")
