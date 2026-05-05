@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import cmocean.cm as cmo
+import mplhep as hep
 
 
 from ..viz.histograms import hist_mean_std, calculate_natural_bins
@@ -37,8 +38,13 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     fig,axes= plt.subplots(1,3, figsize=figsize)
 
     ax = axes[0]
-    adc_hists['ADCsPlaneU'].to_hist().plot(ax=ax)
-    adc_hists['ADCsNoisePlaneU'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsPlaneU'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsNoisePlaneU'].to_hist().plot(ax=ax)
+
+    hep.histplot(adc_hists['ADCsPlaneU'].to_hist(), yerr=False, ax=ax)
+    hep.histplot(adc_hists['ADCsNoisePlaneU'].to_hist(), yerr=False, ax=ax)
+
+
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
@@ -68,8 +74,12 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
     ax.set_title('Plane U [0] ')
 
     ax = axes[1]
-    adc_hists['ADCsPlaneV'].to_hist().plot(ax=ax)
-    adc_hists['ADCsNoisePlaneV'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsPlaneV'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsNoisePlaneV'].to_hist().plot(ax=ax)
+
+    hep.histplot(adc_hists['ADCsPlaneV'].to_hist(), yerr=False, ax=ax)
+    hep.histplot(adc_hists['ADCsNoisePlaneV'].to_hist(), yerr=False, ax=ax)
+
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
@@ -100,8 +110,12 @@ def draw_signal_and_noise_adc_distros(tpws: TriggerPrimitivesWorkspace, signal_l
 
 
     ax = axes[2]
-    adc_hists['ADCsPlaneX'].to_hist().plot(ax=ax)
-    adc_hists['ADCsNoisePlaneX'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsPlaneX'].to_hist().plot(ax=ax)
+    # adc_hists['ADCsNoisePlaneX'].to_hist().plot(ax=ax)
+
+    hep.histplot(adc_hists['ADCsPlaneX'].to_hist(), yerr=False, ax=ax)
+    hep.histplot(adc_hists['ADCsNoisePlaneX'].to_hist(), yerr=False, ax=ax)
+
     ax.set_xlabel('adc value')
     ax.set_ylabel('counts')
 
@@ -199,7 +213,7 @@ class TPSignalNoiseAnalyzer:
                  tp_selection: TPSignalNoiseSelector, 
                  signal_name: str ='Signal'
                  ):
-        self.tps = tp_selection
+        self.tp_sel = tp_selection
         self.signal_name = signal_name
 
     def draw_tp_sig_origin_2d_dist(self, signal_label='Signal', figsize=(12,10)):
@@ -210,41 +224,41 @@ class TPSignalNoiseAnalyzer:
         cmap=None
         # XY row
         ax = axes[0][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane U [0]')
 
         ax = axes[0][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_1.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane V [1]')
 
         ax = axes[0][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_2.plot.scatter(x='bt_primary_y', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XY origin - Plane X [2]')
 
         # XZ row
         ax = axes[1][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_p0.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane U [0]')
 
         ax = axes[1][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_1.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane V [1]')
 
         ax = axes[1][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_2.plot.scatter(x='bt_primary_z', y='bt_primary_x', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('XZ origin - Plane X [2]')
 
         # YZ row
         ax = axes[2][0]
-        self.tps.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha,c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_p0.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha,c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane U [0]')
 
         ax = axes[2][1]
-        self.tps.sig_p1.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_1.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane V [1]')
 
         ax = axes[2][2]
-        self.tps.sig_p2.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
+        self.tp_sel.sig_view_2.plot.scatter(x='bt_primary_y', y='bt_primary_z', alpha=alpha, c=col, cmap=cmap, s=1, ax=ax)
         ax.set_title('YZ origin - Plane X [2]')
 
         fig.suptitle(f"{signal_label} TP point of origin on XY, XZ and YZ planes")
@@ -254,7 +268,7 @@ class TPSignalNoiseAnalyzer:
     
     def draw_tp_sig_drift_depth_dist(self, weight_by:str = None, bins=100, figsize=(12, 5)):
 
-        tps=self.tps
+        tps=self.tp_sel
 
         x_label = 'drift depth [x]'
         y_label = weight_by if weight_by else 'counts'
@@ -271,15 +285,15 @@ class TPSignalNoiseAnalyzer:
         ax.set_ylabel(y_label)
 
         ax = axes[1]
-        w = tps.sig_p1[weight_var] if weight_by else None
-        tps.sig_p1.bt_primary_x.hist(bins=bins, weights=w, ax=ax)
+        w = tps.sig_view_1[weight_var] if weight_by else None
+        tps.sig_view_1.bt_primary_x.hist(bins=bins, weights=w, ax=ax)
         ax.set_title('V plane [1]')
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
 
         ax = axes[2]
-        w = tps.sig_p2[weight_var] if weight_by else None
-        tps.sig_p2.bt_primary_x.hist(bins=bins, weights=w,ax=ax)
+        w = tps.sig_view_2[weight_var] if weight_by else None
+        tps.sig_view_2.bt_primary_x.hist(bins=bins, weights=w,ax=ax)
         ax.set_title('X plane [2]')
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
@@ -298,8 +312,8 @@ class TPSignalNoiseAnalyzer:
         Returns:
             _type_: _description_
         """
-        fig,axes= plt.subplots(1,3, figsize=figsize, sharey=True)
-        tps=self.tps
+        fig,axes= plt.subplots(1,3, figsize=figsize, sharey=False)
+        tps=self.tp_sel
         n_bins=(tps.all.sample_start.max()-tps.all.sample_start.min())//100
 
         ax=axes[0]
@@ -311,7 +325,7 @@ class TPSignalNoiseAnalyzer:
         ax.legend(['Signal', 'Noise'])
 
         ax=axes[1]
-        ax.hist([tps.sig_p1.sample_start,tps.noise_p1.sample_start], stacked=True, bins=n_bins, log=True)
+        ax.hist([tps.sig_view_1.sample_start,tps.noise_p1.sample_start], stacked=True, bins=n_bins, log=True)
         ax.set_title('Plane V [1]')
         ax.set_xlabel('TP peak time sample')
         ax.set_ylabel('counts')
@@ -319,7 +333,7 @@ class TPSignalNoiseAnalyzer:
         ax.legend(['Signal', 'Noise'])
 
         ax=axes[2]
-        ax.hist([tps.sig_p2.sample_start,tps.noise_p2.sample_start], stacked=True, bins=n_bins, log=True)
+        ax.hist([tps.sig_view_2.sample_start,tps.noise_p2.sample_start], stacked=True, bins=n_bins, log=True)
         ax.set_title('Plane X [2]')
         ax.set_xlabel('TP peak time sample')
         ax.set_ylabel('counts')
@@ -331,11 +345,11 @@ class TPSignalNoiseAnalyzer:
         return fig
     
 
-    def draw_tp_event(self, event, figsize=(12,5)):
+    def draw_tp_event(self, entry, figsize=(12,5)):
 
-        ev_tps = self.tps.query(f'event == {event}')
+        ev_tps = self.tp_sel.query(f'entry == {entry}')
         if len(ev_tps) == 0:
-            raise RuntimeError(f"Event {event} not found. Events: {self.tps.all.event.unique()}")
+            raise RuntimeError(f"Event {entry} not found. Events: {self.tp_sel.all.event.unique()}")
 
         fig, axes = plt.subplots(1,3, figsize=figsize, sharex=True, sharey=True)
 
@@ -357,18 +371,18 @@ class TPSignalNoiseAnalyzer:
 
         ax = axes[1]
         ev_tps.noise_p1.plot.scatter(x='channel', y='sample_peak', color=cmap(1), alpha=alpha, s=marker_size, ax=ax)
-        ev_tps.sig_p1.plot.scatter(x='channel', y='sample_peak', color=cmap(0), alpha=alpha, s=marker_size, ax=ax)
+        ev_tps.sig_view_1.plot.scatter(x='channel', y='sample_peak', color=cmap(0), alpha=alpha, s=marker_size, ax=ax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
 
         ax = axes[2]
         ev_tps.noise_p2.plot.scatter(x='channel', y='sample_peak', color=cmap(1), alpha=alpha, s=marker_size, ax=ax)
-        ev_tps.sig_p2.plot.scatter(x='channel', y='sample_peak', color=cmap(0), alpha=alpha, s=marker_size, ax=ax)
+        ev_tps.sig_view_2.plot.scatter(x='channel', y='sample_peak', color=cmap(0), alpha=alpha, s=marker_size, ax=ax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
-        fig.suptitle(f"Event {event}, signal and noise TPs")
+        fig.suptitle(f"Event {entry}, signal and noise TPs")
         fig.tight_layout()
         return fig
     
@@ -385,7 +399,7 @@ class TPSignalNoiseAnalyzer:
         max_bins = 1024
         
         fig, axes= plt.subplots(1,3, figsize=figsize, sharey=True)
-        tps=self.tps
+        tps=self.tp_sel
 
         # var='peakADC'
 
@@ -419,60 +433,60 @@ class TPSignalNoiseAnalyzer:
         return fig
     
 
-    def draw(self, var, n_x_bins=30, log=False, figsize=(10,8)):
-        """What does this draw? Obsolete!
+    # def draw(self, var, view=2, n_x_bins=30, log=False, figsize=(10,8)):
+    #     """What does this draw? Obsolete!
 
-        Args:
-            var (_type_): _description_
-            n_x_bins (int, optional): _description_. Defaults to 30.
-            log (bool, optional): _description_. Defaults to False.
-            figsize (tuple, optional): _description_. Defaults to (10,8).
+    #     Args:
+    #         var (_type_): _description_
+    #         n_x_bins (int, optional): _description_. Defaults to 30.
+    #         log (bool, optional): _description_. Defaults to False.
+    #         figsize (tuple, optional): _description_. Defaults to (10,8).
 
-        Returns:
-            _type_: _description_
-        """
+    #     Returns:
+    #         _type_: _description_
+    #     """
 
-        tps=self.tps
+    #     tps=self.tp_sel
 
-        # Split the dataset into bins by depth
-        g = tps.sig_p2.groupby(pd.cut(tps.sig_p2.TP_trueX, n_x_bins))
+    #     # Split the dataset into bins by depth
+    #     g = tps.sig_view[2].groupby(pd.cut(tps.sig_view_2.TP_trueX, n_x_bins))
 
-        fig, axes = subplot_autogrid(len(g), figsize=figsize, sharey=True)
+    #     fig, axes = subplot_autogrid(len(g), figsize=figsize, sharey=True)
 
-        col=f'TP_{var}'
+    #     col=f'TP_{var}'
 
-        # x_min=tps.p2[col].min()
-        # x_max=tps.p2[col].max()
+    #     # x_min=tps.p2[col].min()
+    #     # x_max=tps.p2[col].max()
 
-        # x_range=(x_max-x_min)
-        # n_bins=int(x_range)//10
-        # dx = x_range/n_bins
+    #     # x_range=(x_max-x_min)
+    #     # n_bins=int(x_range)//10
+    #     # dx = x_range/n_bins
 
-        # bins = [ (x_min + i*dx) for i in range(n_bins+1)]
-        bins=10
+    #     # bins = [ (x_min + i*dx) for i in range(n_bins+1)]
+    #     bins=10
 
-        for k, (i, df) in enumerate(g):
-            ax = axes[k]
-            df[col].hist(bins=bins,ax=ax, log=log)
-            ax.set_title(f"x = ({i.left:.0f},{i.right:.0f})")
+    #     for k, (i, df) in enumerate(g):
+    #         ax = axes[k]
+    #         df[col].hist(bins=bins,ax=ax, log=log)
+    #         ax.set_title(f"x = ({i.left:.0f},{i.right:.0f})")
 
-        fig.suptitle(col)
-        fig.tight_layout()
-        return fig
+    #     fig.suptitle(col)
+    #     fig.tight_layout()
+    #     return fig
     
 
-    def draw_variable_in_drift_grid(self, var, n_x_bins=30, downsampling=10, log=False, sharex=False, sharey=False, figsize=(10,8)):
+    def draw_variable_in_drift_grid(self, var, view=2, n_x_bins=30, downsampling=10, log=False, sharex=False, sharey=False, figsize=(10,8)):
 
-        tps=self.tps
+        tps=self.tp_sel
         # Split the dataset into bins by depth
-        g = tps.sig_p2.groupby(pd.cut(tps.sig_p2.bt_primary_x, n_x_bins), observed=False)
+        g = tps.sig_by_view[view].groupby(pd.cut(tps.sig_by_view[view].bt_primary_x, n_x_bins), observed=False)
 
         fig, axes = subplot_autogrid(len(g), figsize=figsize, sharex=sharex, sharey=sharey)
 
         col=f'{var}'
 
         # bins = [ (x_min + i*dx) for i in range(n_bins+1)]
-        bins=calculate_natural_bins(tps.p2[col], downsampling)
+        bins=calculate_natural_bins(tps.all_by_view[view][col], downsampling)
 
         for k, (i, df) in enumerate(g):
             ax = axes[k]
@@ -480,16 +494,65 @@ class TPSignalNoiseAnalyzer:
             ax.set_title(f"{i.left:.0f} < x < {i.right:.0f}")
             ax.set_xlabel(var)
 
-        fig.suptitle(f"{var} - plane 2")
+        fig.suptitle(f"{var} - view {view}")
         fig.tight_layout()
         return fig
     
+    def draw_tps_per_track_in_drift_grid(self, view=2, n_x_bins=30, sharex=False, sharey=False, figsize=(10,8)):
+        """Draw the TP multiplicity per primary track id in bins of x (drift coordinate)
+
+        Args:
+            view (int, optional): _description_. Defaults to 2.
+            n_x_bins (int, optional): _description_. Defaults to 30.
+            sharex (bool, optional): _description_. Defaults to False.
+            sharey (bool, optional): _description_. Defaults to False.
+            figsize (tuple, optional): _description_. Defaults to (10,8).
+
+        Returns:
+            _type_: _description_
+        """
+
+        df_tps = self.tp_sel.sig_by_view[view]
+        # df_tps = df_tps.query('adc_peak > 36')
+        df_tps = df_tps.assign(x_bin=pd.cut(df_tps["bt_primary_x"], bins=n_x_bins))
+
+        # 1. Track sizes within each (entry, x_bin)
+        track_sizes = (df_tps
+            .groupby(["entry", "x_bin", "bt_primary_track_id"], observed=True)
+            .size())
+
+        # 2. Count how many tracks have each size, per (entry, x_bin)
+        size_counts = (track_sizes
+            .groupby(level=["entry", "x_bin"], observed=True)
+            .value_counts())
+
+        size_counts.index.set_names("track_size", level=-1, inplace=True)
+        result = size_counts.groupby(level=["x_bin", "track_size"], observed=True).sum()
+
+        # 3. Reshape into a histogram table: rows = x_bin, columns = track_size
+        hist_table = result.unstack("track_size", fill_value=0).sort_index(axis=1)
+
+        fig, axes = subplot_autogrid(len(hist_table), figsize=figsize, sharex=sharex, sharey=sharey)
+        for ax, (x_bin, row) in zip(axes.values(), hist_table.iterrows()):
+            sizes = row.index.astype(int).to_numpy()
+            counts = row.values
+            ax.hist(sizes, bins=range(sizes.min(), sizes.max() + 2), weights=counts)
+            ax.set_title(f"{x_bin.left:.0f} < x < {x_bin.right:.0f}")
+            ax.set_ylabel("Counts")
+            ax.set_xlabel("# TPs / track")
+
+
+        fig.suptitle(f"TP multiplicity per track - view {view}")
+
+        fig.tight_layout()
+        return fig
+        
 
     def draw_variable_drift_stack(self, var, n_x_bins=30, downsampling=10, log=False, figsize=(10,8)):
 
-        tps=self.tps
+        tps=self.tp_sel
         # Split the dataset into bins by depth
-        g = tps.sig_p2.groupby(pd.cut(tps.sig_p2.bt_primary_x, n_x_bins), observed=False)
+        g = tps.sig_view_2.groupby(pd.cut(tps.sig_view_2.bt_primary_x, n_x_bins), observed=False)
 
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -525,7 +588,7 @@ class TPSignalNoiseAnalyzer:
         Returns:
             _type_: _description_
         """
-        tps=self.tps
+        tps=self.tp_sel
 
         var_list = ['adc_peak', 'adc_integral', 'samples_over_threshold']
         var_labels = {
@@ -558,10 +621,13 @@ class TPSignalNoiseAnalyzer:
         # remove the underlying axes
         for ax in axes[-1,:]:
             ax.remove()
+        # Add 2x1 plot
         ax_trailer = fig.add_subplot(gs[2, :-1])
+
+        # Add table plot
         ax_table = fig.add_subplot(gs[2, -1:])
 
-        df = tps.sig_p2
+        df = tps.sig_view_2
 
         for i,v in enumerate(var_list):
             b = bins_map[v]
@@ -589,7 +655,7 @@ class TPSignalNoiseAnalyzer:
             if log:
                 axes[1][i].set_yscale("log")
 
-        df = tps.sig_p2
+        df = tps.sig_view_2
         ax_trailer.hist([df[df[var] > thres].bt_primary_x for thres in reversed(thresholds)], histtype='stepfilled', color=colors, bins=100)
         ax_trailer.set_xlabel("drift coordinate")
         ax_trailer.set_title(self.signal_name)
@@ -603,7 +669,9 @@ class TPSignalNoiseAnalyzer:
 
         the_table = ax_table.table(cellText=df_table.values, colLabels=df_table.columns, loc='center')
         the_table.auto_set_column_width([0,1,2])
-
+        the_table.auto_set_font_size(False)
+        the_table.set_fontsize(15)
+        the_table.scale(1.5, 1.5)
 
         fig.suptitle(f"Incremental {var} cuts (collection)")
 
@@ -623,7 +691,7 @@ class TPSignalNoiseAnalyzer:
             pd.DataFrame: Dataframe containing number of signal and noise tps, and corresponding rates, for each threshold value
         """
         
-        tps=self.tps
+        tps=self.tp_sel
 
         # df_sig = getattr(tps, f'sig_p{plane_id:d}')
         # df_noise = getattr(tps, f'noise_p{plane_id:d}')
@@ -666,7 +734,7 @@ class TPSignalNoiseAnalyzer:
 
         df['noise_dominance'] = df.n_noise/df.n_sig
         df['purity'] = df.n_sig/(df.n_noise+df.n_sig)
-        df['completeness'] = df.n_sig/len(self.tps.sig_p2)
+        df['completeness'] = df.n_sig/len(self.tp_sel.sig_view_2)
 
         cmap='tab20'
     

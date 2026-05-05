@@ -1,13 +1,11 @@
 
 import logging
 import uproot
-import json
 import pandas as pd
 import numpy as np
-import awkward as ak
 
-from rich import print
-from typing import Tuple, Optional, Union, Sequence, Dict
+# from rich import print
+from typing import Optional, List
 
 from .rootio import TriggerNtupleReader, RawWaveformsNtupleReader
 
@@ -125,6 +123,8 @@ class TriggerPrimitivesWorkspace:
 
         # RawADCs registry
         self.rawdigis_events = []
+        
+        self.rawdigits_hists = {}
         self._rawadcs = {}
 
         # Ancillary information
@@ -213,7 +213,8 @@ class TriggerPrimitivesWorkspace:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
         tree = getattr(self, f'{df_id}_tree')
         df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
-
+        if 'event_uid' not in df.columns:
+            df['event_uid'] = df.run*1000000+df.subrun*100+df.event
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df
@@ -344,15 +345,21 @@ class TriggerPrimitivesWorkspace:
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
 
-    def get_rawadcs(self, ev: int) -> pd.DataFrame:
+    def get_rawadcs(self, ev: int, channel_mask: Optional[List[int]] = None) -> pd.DataFrame:
         if not ev in self.rawdigis_events:
             self._log.warning(f"RawADCs for event {ev} are not available")
             return None
 
         else:
-            if ev in self._rawadcs:
+            rawadc = self._rawadcs.get(ev, None)
+            if rawadc is not None and channel_mask == rawadc.prod_info['channel_mask']:
                 return self._rawadcs[ev]
 
-            self._rawadcs[ev] = self.rawdigits_tree.to_df(ev)
+            rwdf = TrgDataFrame(self.rawdigits_tree.to_df(ev, channel_mask=channel_mask))
+            rwdf.prod_info = {
+                'channel_mask': channel_mask
+            }
+            self._rawadcs[ev] = rwdf
+            
             return self._rawadcs[ev]
 

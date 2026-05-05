@@ -1,95 +1,103 @@
-# Number of channels per CRP in simulation
-crp_tot_num_chans_sim = 3456
-crp_view_0_num_chans_sim = 1144 
-crp_view_1_num_chans_sim = 1144
-crp_view_2_num_chans_sim = 1168
+import json
+from dataclasses import dataclass, field
+from importlib.resources import files
 
-crp_num_chans_by_view_sim: dict = {
-    0: crp_view_0_num_chans_sim,
-    1: crp_view_1_num_chans_sim,
-    2: crp_view_2_num_chans_sim,
-}
+_geo_cache: dict = {}
 
-from dataclasses import dataclass
 
 @dataclass(frozen=True)
-class FDVDGeometry_1x6x8:
+class FDVDGeometry:
+    """VD detector geometry parameterised by TPC grid dimensions."""
 
+    tpc_geo: tuple  # (n_cryo, n_apa, n_tpc), e.g. (1, 8, 6)
+    geo_resource: str | None = field(default=None, compare=False, hash=False)
 
-    
-    tpc_tot_num_chans_sim: int = 864
-    tpc_view_0_num_chans_sim: int = 286 
+    # Per-view TPC channel counts
+    tpc_view_0_num_chans_sim: int = 286
     tpc_view_1_num_chans_sim: int = 286
     tpc_view_2_num_chans_sim: int = 292
-    
-    tpc_geo: tuple = (1,8,6)
 
-    num_tpcs: int = tpc_geo[0]*tpc_geo[1]*tpc_geo[2]
-    
-
-    crp_tot_num_chans_sim: int = 3456
-    crp_view_0_num_chans_sim: int = 1144 
+    # Per-view CRP channel counts
+    crp_view_0_num_chans_sim: int = 1144
     crp_view_1_num_chans_sim: int = 1144
     crp_view_2_num_chans_sim: int = 1168
 
-    num_crps: int = num_tpcs/4
+    @property
+    def tpc_tot_num_chans_sim(self) -> int:
+        return self.tpc_view_0_num_chans_sim + self.tpc_view_1_num_chans_sim + self.tpc_view_2_num_chans_sim
 
+    @property
+    def crp_tot_num_chans_sim(self) -> int:
+        return self.crp_view_0_num_chans_sim + self.crp_view_1_num_chans_sim + self.crp_view_2_num_chans_sim
 
-    @classmethod
-    def crp_num_chans_by_view_sim(cls, ro_view: int) -> int:
+    @property
+    def num_tpcs(self) -> int:
+        return self.tpc_geo[0] * self.tpc_geo[1] * self.tpc_geo[2]
 
+    @property
+    def num_crps(self) -> float:
+        return self.num_tpcs / 4
+
+    def crp_num_chans_by_view_sim(self, ro_view: int) -> int:
         match ro_view:
             case 0:
-                return cls.crp_view_0_num_chans_sim
+                return self.crp_view_0_num_chans_sim
             case 1:
-                return cls.crp_view_1_num_chans_sim
+                return self.crp_view_1_num_chans_sim
             case 2:
-                return cls.crp_view_2_num_chans_sim
+                return self.crp_view_2_num_chans_sim
             case _:
                 raise KeyError(f"No {ro_view} readout view")
 
-    @classmethod
-    def tpc_num_chans_by_view_sim(cls, ro_view: int) -> int:
-
+    def tpc_num_chans_by_view_sim(self, ro_view: int) -> int:
         match ro_view:
             case 0:
-                return cls.tpc_view_0_num_chans_sim
+                return self.tpc_view_0_num_chans_sim
             case 1:
-                return cls.tpc_view_1_num_chans_sim
+                return self.tpc_view_1_num_chans_sim
             case 2:
-                return cls.tpc_view_2_num_chans_sim
+                return self.tpc_view_2_num_chans_sim
             case _:
                 raise KeyError(f"No {ro_view} readout view")
-            
 
-    @classmethod
-    def tpc_id_to_grid(cls, tpc_id):
-
-        _, num_y, _ = cls.tpc_geo
-
+    def tpc_id_to_grid(self, tpc_id):
+        _, num_y, _ = self.tpc_geo
         k, j = divmod(tpc_id, num_y)
-    
-        return (j,k)
+        return (j, k)
 
-    @classmethod
-    def tpc_channel(cls, channel):
-        
-        tpc_id, tpc_ch = divmod(channel, cls.tpc_tot_num_chans_sim)
-
+    def tpc_channel(self, channel):
+        tpc_id, tpc_ch = divmod(channel, self.tpc_tot_num_chans_sim)
         return tpc_ch
 
-    @classmethod
-    def tpc_view_channel(cls, channel):
-
-        tpc_ch = cls.tpc_channel(channel)
-
-        if tpc_ch < cls.tpc_view_0_num_chans_sim:
+    def tpc_view_channel(self, channel):
+        tpc_ch = self.tpc_channel(channel)
+        if tpc_ch < self.tpc_view_0_num_chans_sim:
             return (0, tpc_ch)
-        elif tpc_ch < cls.tpc_view_0_num_chans_sim+cls.tpc_view_1_num_chans_sim:
-            return (1, tpc_ch - cls.tpc_view_0_num_chans_sim)
-        elif tpc_ch < (cls.tpc_view_0_num_chans_sim+cls.tpc_view_1_num_chans_sim+cls.tpc_view_2_num_chans_sim):
-            return (2, tpc_ch - (cls.tpc_view_0_num_chans_sim+cls.tpc_view_1_num_chans_sim))
-            
+        elif tpc_ch < self.tpc_view_0_num_chans_sim + self.tpc_view_1_num_chans_sim:
+            return (1, tpc_ch - self.tpc_view_0_num_chans_sim)
+        elif tpc_ch < self.tpc_tot_num_chans_sim:
+            return (2, tpc_ch - (self.tpc_view_0_num_chans_sim + self.tpc_view_1_num_chans_sim))
+        
+    def geo(self) -> dict:
+        """Return the full geometry dict loaded from the bundled JSON resource."""
+        if self not in _geo_cache:
+            if self.geo_resource is None:
+                raise ValueError("No geo_resource set for this FDVDGeometry instance")
+            text = files("tpvalidator.data.geo").joinpath(self.geo_resource).read_text()
+            _geo_cache[self] = json.loads(text)
+        return _geo_cache[self]
 
+    def tpc_view_channel_range(self, ro_view):
+        match ro_view:
+            case 0:
+                return (0, self.tpc_view_0_num_chans_sim)
+            case 1:
+                return (self.tpc_view_0_num_chans_sim, self.tpc_view_0_num_chans_sim+self.tpc_view_1_num_chans_sim)
+            case 2:
+                return (self.tpc_view_0_num_chans_sim+self.tpc_view_1_num_chans_sim, self.tpc_view_0_num_chans_sim+self.tpc_view_1_num_chans_sim+self.tpc_view_2_num_chans_sim)
+            case _:
+                raise KeyError(f"No {ro_view} readout view")
 
-
+# Module-level singletons — use these instead of instantiating FDVDGeometry directly
+FDVDGeometry_1x8x6  = FDVDGeometry(tpc_geo=(1, 8,  6), geo_resource="dunevd10kt_1x8x6_3view_30deg_geo.json")
+FDVDGeometry_1x8x14 = FDVDGeometry(tpc_geo=(1, 8, 14), geo_resource="dunevd10kt_1x8x14_3view_30deg_geo.json")

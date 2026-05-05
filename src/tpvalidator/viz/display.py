@@ -23,7 +23,7 @@ class TriggerPrimitivesEventViewer:
         'mctruths': 'mctruths',
     }
 
-    def __init__(self, ws, labels=None):
+    def __init__(self, ws, labels={}):
 
         df_labels = self.labels.copy()
         df_labels.update(labels)
@@ -60,7 +60,8 @@ class TriggerPrimitivesEventViewer:
 
         tps = tps.query(' & '.join([f'({q})' for q in selection]))
 
-        print(mctruths.query(f'event_uid == {ev_uid}'))
+        # TODO: add a check 
+        # print(mctruths.query(f'event_uid == {ev_uid}'))
 
         # vmax = tps.adc_integral.max()/5
         # vmin = tps.adc_integral.min()
@@ -75,9 +76,9 @@ class TriggerPrimitivesEventViewer:
         # scat = ax.scatter(tps.bt_primary_y, tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c=tps.ta_win_id)#, vmin=vmin, vmax=vmax)
 
         # # Add projections on the YZ plane (CRP) and XY plane (collection/drift)
-        # ax.scatter(np.full_like(tps.bt_primary_y, ax_ranges.bt_primary_y[0]), tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
-        # ax.scatter(tps.bt_primary_y, np.full_like(tps.bt_primary_z, ax_ranges.bt_primary_z[1]), tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
-        # ax.scatter(tps.bt_primary_y, tps.bt_primary_z, np.full_like(tps.bt_primary_x, ax_ranges.bt_primary_x[0]), s=tps.samples_over_threshold/2, c='gray')
+        ax.scatter(np.full_like(tps.bt_primary_y, ax_ranges.bt_primary_y[0]), tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
+        ax.scatter(tps.bt_primary_y, np.full_like(tps.bt_primary_z, ax_ranges.bt_primary_z[1]), tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
+        ax.scatter(tps.bt_primary_y, tps.bt_primary_z, np.full_like(tps.bt_primary_x, ax_ranges.bt_primary_x[0]), s=tps.samples_over_threshold/2, c='gray')
 
         ax.set_xlim3d(*list(ax_ranges.bt_primary_y))
         ax.set_ylim3d(*list(ax_ranges.bt_primary_z))

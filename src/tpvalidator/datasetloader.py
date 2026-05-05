@@ -1,7 +1,7 @@
 from pathlib import Path
 import logging
 import yaml
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, field_validator
 import tpvalidator
 import tpvalidator.workspace as workspace
@@ -32,7 +32,7 @@ class DatasetsConfig(BaseModel):
             raise ValueError("datasets_spec must not be empty")
         return v
 
-def load(dataset_dir: str):
+def load(dataset_dir: str, selection: Optional[List[str]]= None):
 
     dataset_dir = Path(dataset_dir)
     if not dataset_dir.is_absolute():
@@ -60,6 +60,8 @@ def load(dataset_dir: str):
     dataset_path = dataset_dir / cfg.dataset_path
     datasets = {}
     for name, entry in cfg.datasets_spec.items():
+        if selection and name not in selection:
+            continue
         ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file, extra_info=cfg.dataset_info)
         if entry.rawadc_file:
             print(f"Adding {entry.rawadc_file}")

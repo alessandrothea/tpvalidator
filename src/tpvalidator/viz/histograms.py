@@ -324,7 +324,7 @@ def hist_and_sum(
         axis = hist.axis.Regular(bins, xmin, xmax, name="x")
     else:
         # FIXME:
-        axis =hist.axis.Regular.from_edges(bins, name="x")
+        axis =hist.axis.Variable(bins, name="x")
 
     # --- Build one histogram per column -------------------------------------
     histograms = {}

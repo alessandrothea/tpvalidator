@@ -14,3 +14,7 @@ data/*
 *.pdf
 tmp/
 reports/
+
+# Marimo
+**/__marimo__/
+
