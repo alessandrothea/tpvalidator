@@ -16,6 +16,7 @@ import click
 
 import tpvalidator.workspace as workspace
 import tpvalidator.analyzers.snn as snn
+from tpvalidator.viz.backtracker import BackTrackerPlotter
 from tpvalidator.utils import temporary_log_level
 from tpvalidator.report.portfolio import Portfolio
 from tpvalidator.report.pdf import ReportPDF, load_report_fonts
@@ -47,16 +48,27 @@ _TAG_STYLES = {
 # Figure generation
 # ---------------------------------------------------------------------------
 
-def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) -> Portfolio:
+def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str, output_dir: Path) -> Portfolio:
     print("Generate figures")
 
     tps = snn.TPSignalNoiseSelector(ws.tps)
     tp_ana = snn.TPSignalNoiseAnalyzer(tps, signal_name='Ar39')
 
-    # tps = snn.TPSignalNoiseSelector(ws.tps[(ws.tps.sample_start > 100) & (ws.tps.sample_start < 8100)])
-    # tp_ana = snn.TPSignalNoiseAnalyzer(tps, signal_name='Ar39')
+    # TODO: add the case where no waveforms are present
+    print("Rawdigi events available", ws.rawdigits_tree.event_list())
+    ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
+    btp = BackTrackerPlotter(ws)
+    some_collection_tps = ws.tps.query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid)).query('readout_plane_id==2 & samples_over_threshold==2 & bt_is_signal==1').iloc[0:4]
+    some_collection_tps = (
+        ws.tps
+        .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
+        .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
+        .iloc[0:6]
+    )
 
-    pf = Portfolio(output_dir, 'ar39_5e_00')
+    # print(some_collection_tps)
+
+    pf = Portfolio(output_dir, dataset_name)
 
     if ws.rawdigits_hists:
         pf.add_figure('adc_dist', snn.draw_signal_and_noise_adc_distros, tpws=ws)
@@ -66,6 +78,10 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
     pf.add_figure('x_pos_weighted_dist_all_tps', tp_ana.draw_tp_sig_drift_depth_dist, weight_by='adc_integral')
     pf.add_figure('x_pos_tp_mult_by_tracked', tp_ana.draw_tps_per_track_in_drift_grid, sharex=True, sharey=True, figsize=(12, 10))
     pf.add_figure('start_time_dist_all_tps', tp_ana.draw_tp_start_sample_dist)
+
+    pf.add_figure('bt_nel_eff_by_plane', btp.draw_nel_eff_by_plane)
+    pf.add_figure('bt_tp_vs_rawadc', btp.plot_tps_vs_ides, tps=some_collection_tps)
+
 
     for threshold in (26, 36, 46, 56):
         x = snn.TPSignalNoiseAnalyzer(tps.query(f'adc_peak > {threshold}'))
@@ -98,11 +114,11 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
     pf.add_figure('dists_with_sadcs_cuts', tp_ana.draw_variable_cut_sequence, var='adc_integral', thresholds=cuts, log=True, figsize=(15, 10))
 
     thresholds = list(range(26, 120, 1))
-    pf.add_figure('peak_thresh_scan_perf', tp_ana.draw_threshold_scan, var='adc_peak', thresholds=thresholds)
+    pf.add_figure('peak_thresh_scan_perf', tp_ana.draw_threshold_scan, var='adc_peak', plane_id=2, thresholds=thresholds)
     thresholds = list(range(0, 10, 2))
-    pf.add_figure('tot_thresh_scan_perf', tp_ana.draw_threshold_scan, var='samples_over_threshold', thresholds=thresholds)
+    pf.add_figure('tot_thresh_scan_perf', tp_ana.draw_threshold_scan, var='samples_over_threshold', plane_id=2, thresholds=thresholds)
     thresholds = list(range(0, 500, 100))
-    pf.add_figure('sadc_thresh_scan_perf', tp_ana.draw_threshold_scan, var='adc_integral', thresholds=thresholds)
+    pf.add_figure('sadc_thresh_scan_perf', tp_ana.draw_threshold_scan, var='adc_integral', plane_id=2, thresholds=thresholds)
 
     return pf
 
@@ -137,6 +153,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
     1. What is the backtracking efficienct for the Ar39 sample
     1. Is the rate of trigger primitives from Ar39 compatible with expectations?  
     """)    
+    #--------------------------------------------------------------------------
     # Page 1 — title & data provenance
     pdf.add_slide("Data sample details")
     pdf.write_markdown(f"""
@@ -149,7 +166,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
             * Threshold U: **{notes['tpg_info']['threshold_tpg_plane0']}**
             * Threshold V: **{notes['tpg_info']['threshold_tpg_plane1']}**
             * Threshold X/Z: **{notes['tpg_info']['threshold_tpg_plane2']}**
-        * Events: **{notes['event_begin']}-{notes['event_end']}**
+        * Events: **{notes['num_events']}**
         """,
     )
 
@@ -166,7 +183,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
                        
     # """)
 
-
+    #--------------------------------------------------------------------------
     # Page 2 — ADC distributions
     pdf.add_slide("Noise and AR39 signal distribution")
     pdf.image(pf.path('adc_dist'), w=pdf.epw)
@@ -179,13 +196,27 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         The 3σ and 5σ lines calculated on noise-only waveforms (no IDEs)
     """, tag_styles=ts, li_prefix_color=li_color)
 
+    #--------------------------------------------------------------------------
+    # Backtracking - TPs to IDEs
+    pdf.add_slide("Ar39 TPs backtracking to sim ides")
+    pdf.image(pf.path('bt_tp_vs_rawadc'), h=0.9*pdf.eph, x=Align.L)
+    pdf.set_xy(pdf.eph + 30, 30)
+    pdf.write_markdown("Examples of TP-SimIDE matching for TPs with sot=2")
+
+    #--------------------------------------------------------------------------
+    # Backtracking - TPs to IDEs
+    pdf.add_slide("Ar39 TPs backtracking efficiency (in number of electrons)")
+    pdf.image(pf.path('bt_nel_eff_by_plane'), w=0.9*pdf.epw, x=Align.C)
+
+
+    #--------------------------------------------------------------------------
     # Page 3 — TP origin
-    pdf.add_page()
-    pdf.write_markdown("# **Ar39 TPs origin**", tag_styles=ts)
+    pdf.add_slide("Ar39 TPs origin")
     pdf.image(pf.path('xyz_pos_dist_all_tps', 'png'), h=pdf.eph * 0.9, x=Align.L)
     pdf.set_xy(pdf.eph + 30, 30)
     pdf.write_markdown("Point of origin of TPs (`bt_primary_x`) tagged as signal, i.e. matching an IDE", tag_styles=ts)
 
+    #--------------------------------------------------------------------------
     # Page 4 — example event with incremental peak-ADC cuts
     pdf.add_page()
     pdf.write_markdown("# **Example event: signal and noise TPs**", tag_styles=ts)
@@ -217,6 +248,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         # * NOTE: A lack of signal TPs is evident at `sample_peak > 8200` for all planes. In this region noise TPs have a harder spectrum:
         #     A fraction survives the peakADC cut appearing very similar to signal TPs, suggesting that they may be untagged signal TPs.
 
+    #--------------------------------------------------------------------------
     # Page 5 — TP origin vs drift depth
     pdf.add_page()
     pdf.write_markdown("# **TP point of origin vs drift depth for signal TPs**", tag_styles=ts)
@@ -229,6 +261,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         """,
         tag_styles=ts)
 
+    #--------------------------------------------------------------------------
     # Page 6 — weighted adc_integral vs drift
     pdf.add_page()
     pdf.write_markdown("# **Ar39 - total adc_integral sum vs drift depth for signal TPs**", tag_styles=ts)
@@ -240,8 +273,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         """)
     
     # Page 7:
-    pdf.add_page()
-    pdf.write_markdown("# TP multiplicity per track id vs drift depth", tag_styles=ts)
+    pdf.add_slide("TP multiplicity per track id vs drift depth")
     pdf.image(pf.path('x_pos_tp_mult_by_tracked'), w=0.95*pdf.eph, x=Align.C)
     pdf.write_markdown("""
                        Ar39 deposits are expected to span one or two channels. This is visible in the x-bin closest to CRPs.
@@ -250,9 +282,9 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         """,
         tag_styles=ts)
 
+    #--------------------------------------------------------------------------
     # Page 7 — TP timing
-    pdf.add_page()
-    pdf.write_markdown("# **Timing of TPs tagged as signal and noise**", tag_styles=ts)
+    pdf.add_slide("Timing of TPs tagged as signal and noise")
     pdf.image(pf.path('start_time_dist_all_tps'), w=pdf.epw * 0.9, x=Align.L)
     ii = pdf.image(pf.path('ides_time_dist_all_tps'), h=pdf.eph * 0.3, x=Align.L)
     pdf.move_cursor(dx=ii.rendered_width, dy=-ii.rendered_height + 10)
@@ -260,24 +292,10 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         * Top figures: Distribution of TP time by plane
         * Bottom figure: Distribution of IDEs time of arrival at the anode (CRP)
     """, tag_styles=ts)
-        # * OLD NOTE: The IDEs time distribution shows 2 issues:
-        #     1. A spike at `time=62k`, well beyond the readout window end,
-        #     2. No IDEs beyond `time=8200`.
 
-
-
-    # # Page 8 — TP timing (clean)
-    # pdf.add_page()
-    # pdf.write_markdown("# **Timing of TPs tagged as signal and noise (clean)**", tag_styles=ts)
-    # pdf.image(pf.path('start_time_dist'), w=pdf.epw * 0.9, x=Align.L)
-    # pdf.write_markdown("""
-    #     * Distribution of TP startTime after applying cleanup
-    #     * `sample_start > 100 && sample_start < 8200`
-    # """, tag_styles=ts)
-
+    #--------------------------------------------------------------------------
     # Page 8 — basic TP distributions
-    pdf.add_page()
-    pdf.write_markdown("# **Basic TP distribution**", tag_styles=ts)
+    pdf.add_slide("# **Basic TP distribution**")
     pdf.image(pf.path('vs_elnoise_var_dist'), w=pdf.epw, x=Align.C)
 
     # Page 13 — stacked distributions
@@ -290,8 +308,11 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
     pdf.set_y(y)
     pdf.image(pf.path('sadc_dist_stack_in_drift_bins'), w=pdf.epw // 3, x=x + 2 * pdf.epw // 3)
     pdf.write_markdown(
-        "Comparison of adc_peak, samples_over_threshold and adc_integral in 5 regions of 'bt_primary_x` for the collection plane.",
-        tag_styles=ts)
+        """
+        Comparison of adc_peak, samples_over_threshold and adc_integral in 5 regions of `bt_primary_x` for the collection plane.
+        The distorsion due to dispersion is clearly visible
+        """
+    )
 
     # Pages 10-12 — distributions in drift bins
     for name, title, subtitle in [
@@ -310,7 +331,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         ('dists_with_tot_cuts',     'Effects of samples_over_threshold cuts on distributions'),
         ('dists_with_sadcs_cuts',   'Effects of SADCs cuts on distributions'),
     ]:
-        pdf.add_slide(f"{title}","Plane 2 (X, collection)")
+        pdf.add_slide(title,"Plane 2 (X, collection)")
         pdf.image(pf.path(name), h=pdf.eph * 0.85, x=Align.L)
         pdf.set_xy(pdf.eph + 30, 30)
 
@@ -320,7 +341,8 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         ('tot_thresh_scan_perf',  'samples_over_threshold cut noise rejection efficiency'),
         ('sadc_thresh_scan_perf', 'adc_integral cut noise rejection efficiency'),
     ]:
-        pdf.add_slide(f"{title}")
+        # pdf.add_slide(title, subtitle="Plane 2 (X, collection)")
+        pdf.add_slide(title, "Plane 2 (X, collection)")
         pdf.image(pf.path(name), w=pdf.epw * 0.95, x=Align.C)
         pdf.set_xy(pdf.eph + 30, 30)
 
@@ -360,15 +382,14 @@ def cli(dataset_dir_path, dataset_name, output_dir,
         datasets = dsl.load(dataset_dir_path, [dataset_name])
         ws=datasets[dataset_name]
 
-        events = ws.event_summary.event.unique()
+        num_events = len(ws.event_summary.event)
         notes = {
             'dataset_dir_path': dataset_dir_path,
             'dataset_name': dataset_name,
             'ws_info': ws.info,
             'mc_generator_labels': list(ws.mctruth_blocks_map.values()),
             'tpg_info': ws.info['tpg'][tp_algorith],
-            'event_begin': int(min(events)),
-            'event_end': int(max(events)),
+            'num_events': num_events,
         }
         with open(notes_file, 'w') as fp:
             json.dump(notes, fp, indent=4)
@@ -378,7 +399,7 @@ def cli(dataset_dir_path, dataset_name, output_dir,
             IPython.embed(colors='neutral')
 
         with temporary_log_level(log, logging.INFO):
-            pf = prepare_figures(ws, figures_dir)
+            pf = prepare_figures(ws, dataset_name, figures_dir)
 
     if make_report:
         with open(notes_file, 'r') as fp:

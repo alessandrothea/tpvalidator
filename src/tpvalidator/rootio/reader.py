@@ -282,7 +282,7 @@ class RawWaveformsTree:
         tree: open uproot TTree object for raw waveform data.
     """
 
-    _scalar_branches : List[str] = ["event", "run", "subrun"]
+    _eventuid_branches : List[str] = ["event", "run", "subrun"]
 
     def __init__(self, tree):
         self._tree = tree
@@ -292,10 +292,10 @@ class RawWaveformsTree:
         return getattr(self._tree, name)
 
     def event_list(self):
-        return self._tree.arrays(self._scalar_branches, library='pd').drop_duplicates()
+        return self._tree.arrays(self._eventuid_branches, library='pd').drop_duplicates()
 
 
-    def to_df(self, entry: int, channel_mask: Optional[List[str]]=None):
+    def to_df(self, event, run, subrun, channel_mask: Optional[List[str]]=None):
         """Load waveform data for a given event into a pandas DataFrame.
 
         Dispatches to sparse or dense loading based on whether an
@@ -309,12 +309,13 @@ class RawWaveformsTree:
             pd.DataFrame with columns ``[event, run, subrun, <channel_ids>,
             sample_id]``, one row per ADC sample.
         """
+
         if (self._find_active_channels_branch()):
             _log.info("Loading sparse ADC")
-            df_wf = self._load_sparse_rawadc_data(entry, channel_mask)
+            df_wf = self._load_sparse_rawadc_data(event, run, subrun, channel_mask)
         else:
             _log.info("Loading dense ADC")
-            df_wf = self._load_dense_rawadc_data(entry, channel_mask)
+            df_wf = self._load_dense_rawadc_data(event, run, subrun, channel_mask)
 
         return df_wf
 
@@ -325,7 +326,7 @@ class RawWaveformsTree:
                 return name
         return None
 
-    def _load_dense_rawadc_data(self, entry: Union[int, list] = 1, channel_mask: Optional[List[int]]=None):
+    def _load_dense_rawadc_data(self, event, run, subrun, channel_mask: Optional[List[int]]=None):
         """Load dense waveform data for all channels into a pandas DataFrame.
 
         Reads every branch that is not ``event``, ``run``, or ``subrun`` as a
@@ -342,17 +343,22 @@ class RawWaveformsTree:
             sample_id]``, one row per ADC sample.
         """
 
-        if not (type(entry) == int and entry == 1):
-            raise RuntimeError("Only the loading of the first event is supported")
+        # if not (type(entry) == int and entry == 1):
+        #     raise RuntimeError("Only the loading of the first event is supported")
 
-        chans = [int(o.name) for o in self._tree.branches if o.name not in self._scalar_branches]
+        event_cut = f"(event=={event}) & (run=={run}) & (subrun=={subrun})"
+        if self.event_list().query(event_cut).empty:
+            raise RuntimeError(f"Event ({run}, {subrun}, {event}) not found")
+        
+
+        chans = [int(o.name) for o in self._tree.branches if o.name not in self._eventuid_branches]
         if channel_mask:
             chans = [c for c in chans if c in channel_mask]
 
         _log.debug(f"found {len(chans)} channels")
 
         _log.debug("Loading tree into np arrays")
-        arrays = self._tree.arrays(expressions=self._scalar_branches+[str(c) for c in chans], library='np')
+        arrays = self._tree.arrays(expressions=self._eventuid_branches+[str(c) for c in chans], cut=event_cut, library='np')
         _log.debug("Done loading tree into np arrays")
 
         _log.debug("Converting np arrays to dataframe")
@@ -371,7 +377,7 @@ class RawWaveformsTree:
         return df_rawadc
 
 
-    def _load_sparse_rawadc_data(self, ev_sel: Union[int, list] = 1, channel_mask: Optional[List[str]]=None) -> Optional[pd.DataFrame]:
+    def _load_sparse_rawadc_data(self, event, run, subrun, channel_mask: Optional[List[str]]=None) -> Optional[pd.DataFrame]:
         """Load sparse waveform data, reading only channels listed in the active-channels branch.
 
         Reads the active-channels branch to determine which channel branches to
@@ -380,13 +386,18 @@ class RawWaveformsTree:
         ``None`` on error.
 
         Args:
-            ev_sel: event selection. Only the first event (``1``) is currently
-                supported; passing any other value raises ``RuntimeError``.
+            event, run, subrun: event selection.
+            channel_mask: List of channels to read out
 
         Returns:
             pd.DataFrame with columns ``[event, run, subrun, <channel_ids>,
             sample_id]``, one row per ADC sample, or ``None`` on error.
         """
+
+        event_cut = f"(event=={event}) & (run=={run}) & (subrun=={subrun})"
+        if self.event_list().query(event_cut).empty:
+            raise RuntimeError(f"Event ({run}, {subrun}, {event}) not found")
+    
         try:
             activ_chans_branch = self._find_active_channels_branch()
             if activ_chans_branch is None:
@@ -396,19 +407,17 @@ class RawWaveformsTree:
                 )
             if channel_mask:
                 activ_chans_branch = [c for c in activ_chans_branch if c in channel_mask]
-            branches = [self._scalar_branches, activ_chans_branch]
-            df_evs = self._tree.arrays(branches, library='np')
+            branches = [self._eventuid_branches, activ_chans_branch]
+            df_evs = self._tree.arrays(branches, cut=event_cut, library='np')
             df_evs = pd.DataFrame(df_evs)
 
-            if not (type(ev_sel) == int and ev_sel == 1):
-                raise RuntimeError("Only the loading of the first event is supported")
 
-            ev_num = df_evs.event[0]
-            chans = list(df_evs[df_evs.event == ev_num][activ_chans_branch][0])
+            # ev_num = df_evs.event[0]
+            chans = list(df_evs[activ_chans_branch][0])
             _log.debug(f"found {len(chans)} channels")
 
             _log.debug("Loading tree into np arrays")
-            arrays = self._tree.arrays(["event", "run", "subrun"] + [str(c) for c in chans], library='np')
+            arrays = self._tree.arrays(self._eventuid_branches + [str(c) for c in chans], library='np')
             _log.debug("Done loading tree into np arrays")
 
             # Convert channel column names to integer

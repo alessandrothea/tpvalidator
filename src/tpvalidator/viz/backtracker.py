@@ -9,38 +9,59 @@ from ..utils import subplot_autogrid
 from rich import print
 
 class BackTrackerPlotter:
-    def __init__(self, ws: TriggerPrimitivesWorkspace, ev_num: int):
+    # def __init__(self, ws: TriggerPrimitivesWorkspace, entry_num: int):
+    def __init__(self, ws: TriggerPrimitivesWorkspace):
 
         if ws.simides is None:
             raise RuntimeError(f"No IDE data available in '{ws._data_path}'")
 
-        self.ev_num = ev_num
+        # self.entry_num = entry_num
         self.ws = ws
 
-        self.inspect_tps = self.ws.tps[(self.ws.tps.event == ev_num)]
+        # self.inspect_tps = self.ws.tps[(self.ws.tps.event == entry_num)]
         # Focus on ides from this event only
-        self.event_ides = self.ws.simides[self.ws.simides.event == ev_num]
+        # self.event_ides = self.ws.simides[self.ws.simides.event == entry_num]
 
         self.tpg_info = ws.info['tpg'][ws.tp_maker_name]
         self.tp_thresholds = [self.tpg_info[f'threshold_tpg_plane{i}'] for i in range(3)]
         self.bt_offsets = [ws.info['backtracker'][self.tpg_info['tool']][f'offset_{v}'] for v in ('U', 'V', 'X')]
 
-        self.waveforms = self.ws.get_rawadcs(ev_num)
-        if self.waveforms is None:
-            print(f"[yellow]Warning: no waveform data found in workspace for event {ev_num}[/yellow]")
+        # self.waveforms = self.ws.get_rawadcs(entry_num)
+        # if self.waveforms is None:
+        #     print(f"[yellow]Warning: no waveform data found in workspace for event {entry_num}[/yellow]")
 
 
-    def plot_tps_vs_ides(self, tps: Union[List[int], pd.DataFrame], layout: str = 'grid', figsize=(10, 10)):
+    def plot_tps_vs_ides(self, tps: pd.DataFrame, layout: str = 'grid', figsize=(12, 10)):
+
+        ev_uid_branches = ('event','run', 'subrun')
 
         # IDEs search range around the TP
         ide_search_extension = 250
         tp_win_extension = 3.
 
-        inspect_tps = self.inspect_tps
-        event_ides = self.event_ides
-        waves = self.waveforms
+        # inspect_tps = self.inspect_tps
+        # event_ides = self.event_ides
+        # waves = self.waveforms
+        waves = None
         tp_thresholds = self.tp_thresholds
         offsets = self.bt_offsets
+            
+        # Extracy infos from tps
+        entries = tps.index.get_level_values(0).unique()
+        # print(f"Selected TPs from entries {list(entries)}")
+        event_ides = self.ws.simides.loc[entries]
+        # print(event_ides)
+
+        ev_uids = tps[list(ev_uid_branches)].drop_duplicates()
+        # print(f"Corresponding to events {ev_uids}")
+
+        waves = {}
+        for ev, df in tps.groupby(list(ev_uid_branches)):
+            # print(ev, df.channel.unique())
+            waves[ev] = self.ws.get_rawadcs(*ev, channel_mask=list(df.channel.unique()))
+
+        # for entry in entries:
+        #     self.ws.get_rawadcs(entry)
 
         match layout:
             case 'lin':
@@ -61,14 +82,18 @@ class BackTrackerPlotter:
         match_color = colors[8]
 
         # Make a small local copy
-        if isinstance(tps, list):
-            selected_tps = inspect_tps.iloc[tps].copy()
-        elif isinstance(tps, pd.DataFrame):
+        # if isinstance(tps, list):
+            # selected_tps = inspect_tps.iloc[tps].copy()
+        # el
+        if isinstance(tps, pd.DataFrame):
             selected_tps = tps.copy()
         else:
             raise TypeError(f"Argument 'tps' of unsupported type {type(tps)}")
 
         for i, (index, tp) in enumerate(selected_tps.iterrows()):
+
+            ev = tuple(tp[list(ev_uid_branches)])
+
             ax = axes[i]
             tp_plane = int(tp.readout_view)
             ch_id = int(tp.channel)
@@ -103,14 +128,14 @@ class BackTrackerPlotter:
             ax.set_xlabel("sample")
             ax.set_ylabel("n electrons$")
 
-            if waves is None:
-                print(f"[yellow]No waveforms found for event '{self.ev_num}[/yellow]'")
+            if ev not in waves:
+                print(f"[yellow]No waveforms found for event '{tp[list(ev_uid_branches)].to_dict()}[/yellow]'")
             else:
                 from mpl_axes_aligner import shift
                 shift.yaxis(ax, 0, 0.6, True)
 
                 ## FIXME: using the position as sample_id
-                wf = waves.reset_index()[ch_id]
+                wf = waves[ev].reset_index()[ch_id]
                 wf_mean = wf.mean()
 
                 xmin, xmax = ax.get_xlim()
@@ -129,7 +154,6 @@ class BackTrackerPlotter:
                 ax_2.set_ylabel("adcs")
 
             ymin, ymax = ax.get_ylim()
-            print("ylim", ymin, ymax)
 
             rect_tp = patches.Rectangle((tp_start, ymin), tp.samples_over_threshold, ymax-ymin,
                                     linewidth=2, edgecolor=tp_color, facecolor=tp_color, alpha=0.2)
@@ -147,8 +171,10 @@ class BackTrackerPlotter:
 
         fig.tight_layout()
 
+        return fig
 
-    def draw_eff_by_plane(self, bins=None, figsize=(12, 4)):
+
+    def draw_nel_eff_by_plane(self, bins=None, figsize=(12, 4)):
         ws=self.ws
 
         n_rops = 3

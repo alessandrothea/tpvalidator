@@ -725,10 +725,10 @@ class TPSignalNoiseAnalyzer:
         return df
     
 
-    def draw_threshold_scan(self, var, thresholds, figsize=(12,6)):
+    def draw_threshold_scan(self, var, plane_id, thresholds, figsize=(12,6)):
 
         # Perform threshold scan on collection plane
-        df = self.do_threshold_scan(2, var, thresholds)
+        df = self.do_threshold_scan(plane_id, var, thresholds)
 
         fig,axes= plt.subplots(2,3, figsize=figsize)
 

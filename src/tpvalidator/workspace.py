@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 # from rich import print
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from .rootio import TriggerNtupleReader, RawWaveformsNtupleReader
 
@@ -103,6 +103,7 @@ class TriggerPrimitivesWorkspace:
         self._mcneutrinos_tree_name = f'mcneutrinos'
         self._mcparticles_tree_name = f'mcparticles'
         self._simides_tree_name = f'simides'
+        self._simides_summary_tree_name = f'simides_summary'
 
         self._rawdigits_tree_name: str = 'rawdigis_tree'
 
@@ -119,6 +120,7 @@ class TriggerPrimitivesWorkspace:
         self._mcneutrinos = None
         self._mcparticles = None
         self._simides = None
+        self._simides_summary = None
         self._tps = None
 
         # RawADCs registry
@@ -278,6 +280,13 @@ class TriggerPrimitivesWorkspace:
 
 
     @property
+    def simides(self):
+        if self._simides_summary is None:
+            self._log.debug("Loading IDEs dataset")
+            self._simides_summary = self._load_dataframe_with_event_cut('simides')
+        return self._simides_summary
+
+    @property
     def tps(self):
         if self._tps is None:
             self._log.debug("Loading tps dataset")
@@ -328,7 +337,6 @@ class TriggerPrimitivesWorkspace:
 
         self._raw_tuple_rdr = RawWaveformsNtupleReader(data_path)
 
-
         self._log.info("Loading rawADC tree")
         self.rawdigits_tree = self._raw_tuple_rdr.get_tree(self._rawdigits_tree_name)
 
@@ -340,26 +348,28 @@ class TriggerPrimitivesWorkspace:
             if obj_name.startswith('ADCsPlane') or obj_name.startswith('ADCsNoisePlane'):
                 self.rawdigits_hists[obj_name.split(';')[0]] = self._raw_tuple_rdr[k.split(';')[0]]
 
+        # TODO: 
         self._log.info("Load rawdigis event list")
-        self.rawdigis_events = self.rawdigits_tree.event_list().event.tolist()
+        self.rawdigis_events = self.rawdigits_tree.event_list()
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
 
-    def get_rawadcs(self, ev: int, channel_mask: Optional[List[int]] = None) -> pd.DataFrame:
-        if not ev in self.rawdigis_events:
-            self._log.warning(f"RawADCs for event {ev} are not available")
+    def get_rawadcs(self, event, run, subrun, channel_mask: Optional[List[int]] = None) -> pd.DataFrame:
+        if self.rawdigis_events.query(f"(event=={event}) & (run=={run}) & (subrun=={subrun})").empty:
+            self._log.warning(f"RawADCs for entry ({event}, {run}, {subrun}) are not available")
             return None
 
         else:
-            rawadc = self._rawadcs.get(ev, None)
+            ev_uid=(event, run, subrun)
+            rawadc = self._rawadcs.get(ev_uid, None)
             if rawadc is not None and channel_mask == rawadc.prod_info['channel_mask']:
-                return self._rawadcs[ev]
+                return self._rawadcs[ev_uid]
 
-            rwdf = TrgDataFrame(self.rawdigits_tree.to_df(ev, channel_mask=channel_mask))
+            rwdf = TrgDataFrame(self.rawdigits_tree.to_df(*ev_uid, channel_mask=channel_mask))
             rwdf.prod_info = {
                 'channel_mask': channel_mask
             }
-            self._rawadcs[ev] = rwdf
+            self._rawadcs[ev_uid] = rwdf
             
-            return self._rawadcs[ev]
+            return self._rawadcs[ev_uid]
 
