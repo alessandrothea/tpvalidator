@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.23.3"
-app = marimo.App()
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -223,7 +223,6 @@ def _(MCPlotter, rad_ws):
     from rich.console import Console
 
     mcp.make_generators_table()
-
     return (mcp,)
 
 
@@ -235,7 +234,7 @@ def _(mcp):
 
 @app.cell
 def _(mcp):
-    mcp.plot_distributions(bins=50)
+    mcp.plot_mc_truth_distributions(bins=50)
     return
 
 
@@ -252,28 +251,42 @@ def _(mcp):
 
 
 @app.cell
-def _(mcp):
-    mcp.plot_generator_activity(norm='counts', pdg_id=11, figsize=(8,8))
+def _(mcp, mo):
+    _panels = []
+    _fig = mcp.plot_generator_activity(norm='counts', pdg_id=11, figsize=(8,8))
+    _panels.append(mo.as_html(_fig))
+
+    _fig = mcp.plot_generator_activity(norm='rate', pdg_id=22, figsize=(8,8))
+    _panels.append(mo.as_html(_fig))
+
+    mo.hstack(_panels),
+
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## MC particle position by generator
+    """)
+    return
+
+
+@app.cell
+def _(mcp, mo):
+    _panels = []
+    for v in ['x', 'y', 'z']:
+        _fig = mcp.plot_truth_generator_pos(v, c_scale='log')
+        _panels.append(mo.as_html(_fig))
+
+    mo.hstack(_panels),
+
     return
 
 
 @app.cell
 def _(mcp):
-    mcp.plot_generator_activity(norm='rate', pdg_id=22, figsize=(8,8))
-    return
-
-
-@app.cell
-def _(plt, rad_ws):
-    _fig, _axes = plt.subplots(2, 1)
-    _n_bins = rad_ws.mcparticles.query('pdg == 11').truth_block_id.nunique()
-    rad_ws.mcparticles.query('pdg == 11').truth_block_id.hist(bins=_n_bins, ax=_axes[0])
-    rad_ws.mcparticles.query('truth_block_id == 9').t.hist(ax=_axes[1])
-    return
-
-
-@app.cell
-def _():
+    mcp.plot_truth_generator_pos_ke('CavernwallGammasAtLAr1x8x14')
     return
 
 
@@ -336,21 +349,6 @@ def _(np, plt, rad_sel):
 def _(mct_1, plt):
     mct_1.hist(figsize=(10, 10), bins=100)
     plt.gcf().tight_layout()
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    # Wall gammas origin checks
-    """)
-    return
-
-
-@app.cell
-def _(mct_1):
-    bkg_gammas = mct_1.query('generator_name == "CavernwallGammasAtLAr1x8x6"')
-    bkg_gammas[['x', 'y', 'z']].hist(bins=100, figsize=(10, 10))
     return
 
 
