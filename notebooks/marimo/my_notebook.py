@@ -43,7 +43,7 @@ def _():
     import logging
     import tpvalidator.workspace as workspace
     # import tpvalidator.utils as utils
-    import tpvalidator.analyzers.snn as snn
+    import tpvalidator.analysis.snn as snn
 
     from rich import print
     from tpvalidator.utils import temporary_log_level, pandas_backend
@@ -53,7 +53,7 @@ def _():
 
 @app.cell
 def _():
-    import tpvalidator.datasetloader as dsl
+    import tpvalidator.datacatalogue as dsl
     datasets = dsl.load('data/vd/1x8x14')
     return (datasets,)
 

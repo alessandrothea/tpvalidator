@@ -52,19 +52,22 @@ def subplot_autogrid(n_plots, **kwargs):
     return fig, ax
 
 
-def df_to_tp_rates(df_tp: pd.DataFrame, readout_window: int = None) -> float:
+def calculate_trg_obj_rates(trg_df: pd.DataFrame, readout_window: int = None) -> float:
     """
-    Calculates the TP rates from the TP dataframe.
+    Calculates the rates objects from a trigger dataframe.
 
     If the drift window is not specified, its length is estimated from TP's min and max `sample_start`.
     The estimate is only reliable for well-populated samples.
     """
     sampling_time = 0.5e-6  # Sampling time 1/2 usec
-    readout_window = df_tp.extra_info['readout_window'] if readout_window is None else readout_window
+    readout_window = trg_df.extra_info['readout_window'] if readout_window is None else readout_window
+    num_entries = trg_df.extra_info['num_entries']
+    if not readout_window:
+        raise ValueError(f"Invalid readout window")
 
-    tot_time = readout_window * sampling_time * len(df_tp.event.unique())
+    tot_time = readout_window * sampling_time * num_entries
 
-    n_tps = len(df_tp)
+    n_tps = len(trg_df)
 
     rate = n_tps / (tot_time) if tot_time > 0 else 0
     return rate

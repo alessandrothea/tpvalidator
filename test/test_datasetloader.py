@@ -3,7 +3,7 @@
 import click
 from rich import print
 
-from tpvalidator.datasetloader import load
+from tpvalidator.datacatalogue import load
 
 
 @click.command()

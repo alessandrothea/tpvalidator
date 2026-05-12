@@ -12,6 +12,9 @@ class FDVDGeometry:
     tpc_geo: tuple  # (n_cryo, n_apa, n_tpc), e.g. (1, 8, 6)
     geo_resource: str | None = field(default=None, compare=False, hash=False)
 
+    num_readout_views: int = 3
+    num_readout_planes: int = 3
+    
     # Per-view TPC channel counts
     tpc_view_0_num_chans_sim: int = 286
     tpc_view_1_num_chans_sim: int = 286

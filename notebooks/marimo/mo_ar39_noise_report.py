@@ -18,7 +18,7 @@ def _(mo):
     ---
 
     ## Introduction
-    This notebook aims at characterizing the detector response in simulation using an 1r39-only sample.
+    This notebook aims at characterizing the detector response in simulation using an ar39-only sample.
 
     by answering the following questions
 
@@ -59,9 +59,11 @@ def _(mo):
     import tpvalidator
     import tpvalidator.analyzers.snn as snn
     from rich import print
+    import tpvalidator.datacatalogue as dctlg
+    from tpvalidator.viz.backtracker import BackTrackerPlotter
 
     mo.md("Imports completed")
-    return Path, plt, snn, tpvalidator, yaml
+    return BackTrackerPlotter, dctlg, plt, print, snn
 
 
 @app.cell(hide_code=True)
@@ -77,7 +79,7 @@ def _(mo):
 @app.cell
 def _(mo):
     dataset_dir = mo.ui.text(
-        value="data/vd/1x8x14",
+        value="data/vd/1x8x14/3sig",
         label="Dataset directory",
         full_width=True,
     )
@@ -86,19 +88,23 @@ def _(mo):
 
 
 @app.cell
-def _(Path, dataset_dir, mo, tpvalidator, yaml):
-    _pkg_root = Path(tpvalidator.__file__).parents[2]
-    _dir = Path(dataset_dir.value)
-    if not _dir.is_absolute():
-        _dir = _pkg_root / _dir
+def _(dataset_dir, dctlg, mo, print):
 
-    _cfg_file = _dir / "datasets.yaml"
-    mo.stop(not _cfg_file.exists(), mo.md(f"*No `datasets.yaml` found in `{_dir}`.*"))
 
-    with open(_cfg_file) as _f:
-        _cfg = yaml.safe_load(_f)
+    # _pkg_root = Path(tpvalidator.__file__).parents[2]
+    # _dir = Path(dataset_dir.value)
+    # if not _dir.is_absolute():
+    #     _dir = _pkg_root / _dir
 
-    _names = list(_cfg.get("datasets_spec", {}).keys())
+    # _cfg_file = _dir / "datasets.yaml"
+    # mo.stop(not _cfg_file.exists(), mo.md(f"*No `datasets.yaml` found in `{_dir}`.*"))
+
+    # with open(_cfg_file) as _f:
+    #     _cfg = yaml.safe_load(_f)
+
+    # _names = list(_cfg.get("datasets_spec", {}).keys())
+    print(dataset_dir)
+    _names = dctlg.list_datasets(dataset_dir.value)
     _default = 'ar39_5e_00' if 'ar39_5e_00' in _names else _names[0]
 
     dataset_name = mo.ui.dropdown(options=_names, value=_default, label="Dataset")
@@ -107,24 +113,30 @@ def _(Path, dataset_dir, mo, tpvalidator, yaml):
 
 
 @app.cell
-def _(dataset_dir, dataset_name, mo):
-    import tpvalidator.datasetloader as dsl
+def _(dataset_dir, dataset_name, dctlg, mo):
 
     mo.stop(not dataset_name.value)
 
-    _datasets = dsl.load(dataset_dir.value, [dataset_name.value])
+    _datasets = dctlg.load(dataset_dir.value, [dataset_name.value])
     ws = _datasets[dataset_name.value]
     ws.info
     return (ws,)
 
 
 @app.cell
-def _(mo, snn, ws):
+def _(BackTrackerPlotter, mo, snn, ws):
     mo.stop(ws is None)
 
     all_tps  = snn.TPSignalNoiseSelector(ws.tps)
     tp_ana = snn.TPSignalNoiseAnalyzer(all_tps, signal_name='Ar39')
-    return all_tps, tp_ana
+    btp = BackTrackerPlotter(ws)
+    return all_tps, btp, tp_ana
+
+
+@app.cell
+def _(ws):
+    ws.tps
+    return
 
 
 @app.cell(hide_code=True)
@@ -154,6 +166,25 @@ def _(mo):
 
     The 3σ and 5σ lines calculated on noise-only waveforms (no IDEs)
     """)
+    return
+
+
+@app.cell
+def _(btp, ws):
+    _ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
+    _some_collection_tps = (
+        ws.tps
+        .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**_ev_uid))
+        .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
+        .iloc[0:6]
+    )
+    btp.plot_tps_vs_ides(tps=_some_collection_tps)
+    return
+
+
+@app.cell
+def _(btp):
+    btp.draw_nel_eff_by_plane()
     return
 
 
@@ -403,14 +434,13 @@ def _(mo, tp_ana):
         mo.as_html(tp_ana.draw_variable_drift_stack('adc_integral',
                                      downsampling=5, n_x_bins=4, log=True, figsize=(5, 4))),
     ])
-
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Comparison of `adc_peak`, `samples_over_threshold` and `adc_integral` in 4 regions of trueX for the collection plane.
+    Comparison of `adc_peak`, `samples_over_threshold` and `adc_integral` in 4 regions of `bt_primary_x` for the collection plane.
     """)
     return
 
@@ -427,7 +457,7 @@ def _(mo):
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_variable_cut_sequence('adc_peak',list(range(26, 50, 5)), log=True, figsize=(15, 10))
+    tp_ana.draw_variable_cut_sequence('adc_peak',list(range(26, 70, 5)), log=True, figsize=(15, 10))
     return
 
 

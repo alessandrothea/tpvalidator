@@ -10,7 +10,7 @@ import textwrap
 import logging
 import tpvalidator.workspace as workspace
 import tpvalidator.utils as utils
-import tpvalidator.analyzers.snn as snn
+import tpvalidator.analysis.snn as snn
 
 from rich import print
 from rich.logging import RichHandler

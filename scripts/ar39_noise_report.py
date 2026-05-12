@@ -15,7 +15,7 @@ from rich.logging import RichHandler
 import click
 
 import tpvalidator.workspace as workspace
-import tpvalidator.analyzers.snn as snn
+import tpvalidator.analysis.snn as snn
 from tpvalidator.viz.backtracker import BackTrackerPlotter
 from tpvalidator.utils import temporary_log_level
 from tpvalidator.report.portfolio import Portfolio
@@ -58,7 +58,7 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str,
     print("Rawdigi events available", ws.rawdigits_tree.event_list())
     ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
     btp = BackTrackerPlotter(ws)
-    some_collection_tps = ws.tps.query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid)).query('readout_plane_id==2 & samples_over_threshold==2 & bt_is_signal==1').iloc[0:4]
+    # some_collection_tps = ws.tps.query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid)).query('readout_plane_id==2 & samples_over_threshold==2 & bt_is_signal==1').iloc[0:4]
     some_collection_tps = (
         ws.tps
         .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
@@ -378,7 +378,7 @@ def cli(dataset_dir_path, dataset_name, output_dir,
     pf = Portfolio(figures_dir, dataset_name)
 
     if make_figures:
-        import tpvalidator.datasetloader as dsl
+        import tpvalidator.datacatalogue as dsl
         datasets = dsl.load(dataset_dir_path, [dataset_name])
         ws=datasets[dataset_name]
 

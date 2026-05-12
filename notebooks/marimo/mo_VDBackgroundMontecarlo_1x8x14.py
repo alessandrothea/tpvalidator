@@ -27,14 +27,13 @@ def _():
     import uproot
     import logging
     import tpvalidator.workspace as workspace
-    import tpvalidator.analyzers.snn as snn
+    import tpvalidator.analysis.snn as snn
 
     from rich import print
     from tpvalidator.utils import temporary_log_level, pandas_backend
     from tpvalidator.viz.term import df_to_rich_table
     from tpvalidator.viz.mc import MCPlotter
 
-    from collections import OrderedDict
 
     return MCPlotter, np, pd, plt, print, snn, workspace
 
@@ -147,7 +146,7 @@ def _(mo):
 
 @app.cell
 def _():
-    import tpvalidator.datasetloader as dsl
+    import tpvalidator.datacatalogue as dsl
 
     dataset_name = 'radbkg'
     datasets = dsl.load('data/vd/1x8x14/old_detsim', dataset_name)
@@ -218,49 +217,71 @@ def _(mo):
 
 @app.cell
 def _(MCPlotter, rad_ws):
-    mcp = MCPlotter(rad_ws)
-
-    from rich.console import Console
-
-    mcp.make_generators_table()
-    return (mcp,)
+    mcp_truths = MCPlotter(rad_ws, collection='mctruths')
+    mcp_parts = MCPlotter(rad_ws, collection='mcparticles')
+    return mcp_parts, mcp_truths
 
 
 @app.cell
-def _(mcp):
-    mcp.make_generator_rates_table()
+def _(mcp_truths):
+    mcp_truths.make_generators_table()
     return
 
 
 @app.cell
-def _(mcp):
-    mcp.plot_mc_truth_distributions(bins=50)
+def _(mcp_truths):
+    mcp_truths.make_generator_rates_table()
     return
 
 
 @app.cell
-def _(mcp):
-    mcp.plot_ke_spectra_by_pdg()
+def _(mcp_parts):
+    mcp_parts.make_generator_rates_table()
     return
 
 
 @app.cell
-def _(mcp):
-    mcp.plot_ke_spectra_by_generator()
+def _(mcp_truths):
+    mcp_truths.plot_distributions(bins=50)
     return
 
 
 @app.cell
-def _(mcp, mo):
+def _(mcp_parts, mcp_truths, mo):
     _panels = []
-    _fig = mcp.plot_generator_activity(norm='counts', pdg_id=11, figsize=(8,8))
+    _fig = mcp_truths.plot_ke_spectra_by_pdg()
     _panels.append(mo.as_html(_fig))
 
-    _fig = mcp.plot_generator_activity(norm='rate', pdg_id=22, figsize=(8,8))
+    _fig = mcp_parts.plot_ke_spectra_by_pdg()
     _panels.append(mo.as_html(_fig))
 
     mo.hstack(_panels),
+    return
 
+
+@app.cell
+def _(mcp_parts, mcp_truths, mo):
+    _panels = []
+    _fig = mcp_truths.plot_ke_spectra_by_generator()
+    _panels.append(mo.as_html(_fig))
+
+    _fig = mcp_parts.plot_ke_spectra_by_generator()
+    _panels.append(mo.as_html(_fig))
+
+    mo.hstack(_panels),
+    return
+
+
+@app.cell
+def _(mcp_truths, mo):
+    _panels = []
+    _fig = mcp_truths.plot_generator_activity(norm='counts', pdg_id=11, figsize=(8,8))
+    _panels.append(mo.as_html(_fig))
+
+    _fig = mcp_truths.plot_generator_activity(norm='rate', pdg_id=22, figsize=(8,8))
+    _panels.append(mo.as_html(_fig))
+
+    mo.hstack(_panels),
     return
 
 
@@ -273,20 +294,25 @@ def _(mo):
 
 
 @app.cell
-def _(mcp, mo):
+def _(mcp_truths, mo):
     _panels = []
     for v in ['x', 'y', 'z']:
-        _fig = mcp.plot_truth_generator_pos(v, c_scale='log')
+        _fig = mcp_truths.plot_generator_pos(v, c_scale='log')
         _panels.append(mo.as_html(_fig))
 
     mo.hstack(_panels),
-
     return
 
 
 @app.cell
-def _(mcp):
-    mcp.plot_truth_generator_pos_ke('CavernwallGammasAtLAr1x8x14')
+def _(mcp_truths):
+    mcp_truths.plot_generator_pos_ke('CavernwallGammasAtLAr1x8x14')
+    return
+
+
+@app.cell
+def _(mcp_truths, xy):
+    mcp_truths.plot_generator_origin_2d('CavernwallGammasAtLAr1x8x14', xy)
     return
 
 
