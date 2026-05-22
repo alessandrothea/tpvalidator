@@ -4,7 +4,7 @@ import pandas as pd
 from rich.table import Table
 
 
-def df_to_rich_table(
+def dataframe_to_rich_table(
     pandas_dataframe: pd.DataFrame,
     show_index: bool = True,
     index_name: Optional[str] = None,

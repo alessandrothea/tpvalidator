@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import json
 from pathlib import Path
-from typing import Optional, Union, Dict, List
+from typing import Optional
 from rich import print
 
 _log = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class NtupleReader:
 
     tree_class = None
 
-    def __init__(self, file_path: str, analyzer_dir: str):
+    def __init__(self, file_path: str | Path, analyzer_dir: str):
         path = Path(file_path)
         _check_file_path(path)
 
@@ -202,10 +202,10 @@ class TriggerNtupleReader(NtupleReader):
 
     tree_class = TriggerTree
 
-    def __init__(self, file_path: str, analyzer_dir: str = 'triggerAna'):
+    def __init__(self, file_path: str | Path, analyzer_dir: str = 'triggerAna'):
         super().__init__(file_path, analyzer_dir)
 
-    def get_info(self, info_id: str = 'info') -> Dict:
+    def get_info(self, info_id: str = 'info') -> dict:
         """Load processing information from the TNamed info object as a dict.
 
         Args:
@@ -282,7 +282,7 @@ class RawWaveformsTree:
         tree: open uproot TTree object for raw waveform data.
     """
 
-    _eventuid_branches : List[str] = ["event", "run", "subrun"]
+    _eventuid_branches : list[str] = ["event", "run", "subrun"]
 
     def __init__(self, tree):
         self._tree = tree
@@ -295,7 +295,7 @@ class RawWaveformsTree:
         return self._tree.arrays(self._eventuid_branches, library='pd').drop_duplicates()
 
 
-    def to_df(self, event, run, subrun, channel_mask: Optional[List[str]]=None):
+    def to_df(self, event, run, subrun, channel_mask: Optional[list[str]]=None):
         """Load waveform data for a given event into a pandas DataFrame.
 
         Dispatches to sparse or dense loading based on whether an
@@ -326,7 +326,7 @@ class RawWaveformsTree:
                 return name
         return None
 
-    def _load_dense_rawadc_data(self, event, run, subrun, channel_mask: Optional[List[int]]=None):
+    def _load_dense_rawadc_data(self, event, run, subrun, channel_mask: Optional[list[int]]=None):
         """Load dense waveform data for all channels into a pandas DataFrame.
 
         Reads every branch that is not ``event``, ``run``, or ``subrun`` as a
@@ -377,7 +377,7 @@ class RawWaveformsTree:
         return df_rawadc
 
 
-    def _load_sparse_rawadc_data(self, event, run, subrun, channel_mask: Optional[List[str]]=None) -> Optional[pd.DataFrame]:
+    def _load_sparse_rawadc_data(self, event, run, subrun, channel_mask: Optional[list[str]]=None) -> Optional[pd.DataFrame]:
         """Load sparse waveform data, reading only channels listed in the active-channels branch.
 
         Reads the active-channels branch to determine which channel branches to
@@ -387,7 +387,7 @@ class RawWaveformsTree:
 
         Args:
             event, run, subrun: event selection.
-            channel_mask: List of channels to read out
+            channel_mask: list of channels to read out
 
         Returns:
             pd.DataFrame with columns ``[event, run, subrun, <channel_ids>,
@@ -465,7 +465,7 @@ class RawWaveformsNtupleReader(NtupleReader):
 
     tree_class = RawWaveformsTree
 
-    def __init__(self, file_path: str, analyzer_dir: str = 'triggerana'):
+    def __init__(self, file_path: str | Path, analyzer_dir: str = 'triggerana'):
         super().__init__(file_path, analyzer_dir)
 
 #-----

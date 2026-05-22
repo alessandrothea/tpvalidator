@@ -83,6 +83,7 @@ type Quantiles = float | Sequence[float]
 #     std = np.sqrt(np.clip(np.diag(cov), 0.0, None))
 #     return mean, cov, std
 
+# TODO: review 
 def hist_mean_std_uhi(h, *, flow: bool = False) -> tuple[float, float]:
     """
     Compute mean and standard deviation of a 1D UHI-compatible histogram.
@@ -111,7 +112,7 @@ def hist_mean_std_uhi(h, *, flow: bool = False) -> tuple[float, float]:
     var = np.sum(values * (centers - mean) ** 2) / total
     return mean, np.sqrt(var)
 
-
+# TODO: review 
 def hist_mean_std_uproot(h) -> dict[int, tuple[float, float]]:
     """
     Compute mean and std deviation for an uproot histogram (TH1, TH2).
@@ -149,51 +150,162 @@ def hist_mean_std_uproot(h) -> dict[int, tuple[float, float]]:
     raise NotImplementedError("Only 1D and 2D histograms are supported")
 
 
-def calculate_natural_bins(series: pd.Series, downsampling: int = 10) -> np.ndarray:
-    """Return evenly-spaced bin edges spanning [series.min, series.max) with step `downsampling`."""
-    return np.arange(series.min(), series.max(), downsampling)
+#------------------------------------------------------------------------------
+# Histogram stats
+#
+def _project(h: hist.Hist, axis_index: int) -> np.ndarray:
+    """Marginalise over all axes except `axis_index`."""
+    sum_axes = tuple(i for i in range(h.ndim) if i != axis_index)
+    return h.values().sum(axis=sum_axes)
 
 
-def hist_and_sum(
-    df: pd.DataFrame,
-    cols: Sequence[str],
-    bins: int | Sequence[float],
-) -> tuple[dict[str, hist.Hist], hist.Hist]:
+def _axis_moments(counts: np.ndarray, centers: np.ndarray) -> tuple[float, float]:
     """
-    Generate histograms for selected DataFrame columns and their sum.
+    Compute mean and standard deviation along a single axis
+    from counts and bin centres. Returns (nan, nan) if histogram is empty.
+    """
+    if centers is None:
+        raise TypeError("Mean and std are not defined for categorical axes.")
 
-    Parameters
-    ----------
-    df
-        Input DataFrame.
-    cols
-        Column names to histogram.
-    bins
-        Number of bins or explicit bin edges.
+    total = counts.sum()
+    if total == 0:
+        return float("nan"), float("nan")
+
+    mean    = np.dot(counts, centers)      / total
+    mean_x2 = np.dot(counts, centers ** 2) / total
+    std     = float(np.sqrt(max(mean_x2 - mean ** 2, 0.0)))
+
+    return float(mean), std
+
+
+
+def hist_stats(h: hist.Hist) -> list[tuple[float, float]]:
+    """
+    Compute mean and std per axis for a hist.Hist of any dimensionality.
 
     Returns
     -------
-    histograms
-        Dictionary mapping column name → Hist.
-    sum_hist
-        Histogram equal to the sum of all column histograms.
+    List of (mean, std) tuples, one per axis in axis order.
+
+    Example
+    -------
+    >>> hist_stats(mgr["pt_vs_eta"])
+    [(42.3, 18.7), (0.1, 1.2)]
     """
-    if isinstance(bins, int):
-        agg = df[list(cols)].agg(["min", "max"])
-        xmin = float(agg.loc["min"].min())
-        xmax = float(agg.loc["max"].max())
-        axis = hist.axis.Regular(bins, xmin, xmax, name="x")
-    else:
-        axis = hist.axis.Variable(bins, name="x")
+    return [
+        _axis_moments(_project(h, i), h.axes[i].centers)
+        for i in range(h.ndim)
+    ]
 
-    histograms = {}
-    for c in cols:
-        h = hist.Hist(axis, storage=hist.Double())
-        h.fill(df[c].values)
-        histograms[c] = h
+#
+# Histogram stats
+#------------------------------------------------------------------------------
+def _auto_range_full(values: np.ndarray) -> tuple[float, float]:
+    """
+    Compute histogram range covering all finite values,
+    rounded outward to 2 significant figures for clean labels.
+    """
+    values = values[np.isfinite(values)]
+    lo     = float(values.min())
+    hi     = float(values.max())
 
-    sum_hist = sum(histograms.values())
-    return histograms, sum_hist
+    def _round_out(x: float, direction: int) -> float:
+        """Round to the nearest power of 10
+
+                """
+        if x == 0:
+            return 0.0
+        mag = 10 ** (np.floor(np.log10(abs(x))) - 1)
+        return direction * np.ceil(abs(x) / mag) * mag
+
+    lo = _round_out(lo, -1) if lo < 0 else -_round_out(-lo, -1)
+    hi = _round_out(hi,  1)
+    return lo, hi
+
+
+def compute_regaxis_specs(series: pd.Series, bin_size: int, direction: Literal['left', 'right']='right'):
+    """
+    Compute the inclusive histogram binning range for a choice of bin size
+
+    Args:
+        series (pd.Series): _description_
+        bin_size (int, optional): _description_. Defaults to 10.
+        direction (Literal[&#39;left&#39;, &#39;right&#39;], optional): _description_. Defaults to 'right'.
+
+    Returns:
+        _type_: _description_
+    """
+    import math
+    lo     = float(series.min())
+    hi     = float(series.max())
+
+    num_bins = math.floor((hi-lo)/bin_size)+1
+
+    match direction:
+        case 'right':
+            hi = lo+bin_size*num_bins
+        case 'left':
+            lo = hi-bin_size*num_bins
+
+    return num_bins, lo, hi
+
+
+def linspace(series: pd.Series, step: int = 10) -> np.ndarray:
+    """
+    Return evenly-spaced bin edges spanning [series.min, series.max) with step `step`.
+    """
+    # lo, hi = _auto_range_full(series)
+
+    lo     = float(series.min())
+    hi     = float(series.max())
+
+    return np.arange(lo, hi+step, step)
+
+
+
+
+
+# TODO: Review and integrate
+# def hist_and_sum(
+#     df: pd.DataFrame,
+#     cols: Sequence[str],
+#     bins: int | Sequence[float],
+# ) -> tuple[dict[str, hist.Hist], hist.Hist]:
+#     """
+#     Generate histograms for selected DataFrame columns and their sum.
+
+#     Parameters
+#     ----------
+#     df
+#         Input DataFrame.
+#     cols
+#         Column names to histogram.
+#     bins
+#         Number of bins or explicit bin edges.
+
+#     Returns
+#     -------
+#     histograms
+#         Dictionary mapping column name → Hist.
+#     sum_hist
+#         Histogram equal to the sum of all column histograms.
+#     """
+#     if isinstance(bins, int):
+#         agg = df[list(cols)].agg(["min", "max"])
+#         xmin = float(agg.loc["min"].min())
+#         xmax = float(agg.loc["max"].max())
+#         axis = hist.axis.Regular(bins, xmin, xmax, name="x")
+#     else:
+#         axis = hist.axis.Variable(bins, name="x")
+
+#     histograms = {}
+#     for c in cols:
+#         h = hist.Hist(axis, storage=hist.Double())
+#         h.fill(df[c].values)
+#         histograms[c] = h
+
+#     sum_hist = sum(histograms.values())
+#     return histograms, sum_hist
 
 
 def _extract_flow(
@@ -292,7 +404,7 @@ def quantiles(
     return x_lo + t * (x_hi - x_lo)
 
 
-def hist_cumulative(
+def cumsum_hist(
     h: hist.Hist,
     direction: Literal["left", "right"] = "left",
     normalise: bool = False,
@@ -335,7 +447,15 @@ def hist_cumulative(
         cum_vars = cum_vars / (norm ** 2)
         cum = cum / norm
 
-    cum_hist = hist.Hist(h.axes[0], storage=hist.storage.Weight())
-    cum_hist.view().value = cum
+    axis = h.axes[0]
+    out_axis = hist.axis.Variable(
+        axis.edges,
+        name=axis.name,
+        label=getattr(axis, "label", None),
+        underflow=False,
+        overflow=False,
+    )
+    cum_hist = hist.Hist(out_axis, storage=hist.storage.Weight())
+    cum_hist.view().value    = cum
     cum_hist.view().variance = cum_vars
     return cum_hist

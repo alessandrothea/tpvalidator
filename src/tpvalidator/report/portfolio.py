@@ -81,6 +81,9 @@ class Portfolio:
 
         return img_path
 
+    def has_figure(self, name: str):
+        return name in self.figures
+
     def path(self, name: str, fmt: str = 'svg') -> Path:
         """Return the saved path for a named figure.
 

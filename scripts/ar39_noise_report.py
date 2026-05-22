@@ -55,18 +55,10 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str,
     tp_ana = snn.TPSignalNoiseAnalyzer(tps, signal_name='Ar39')
 
     # TODO: add the case where no waveforms are present
-    print("Rawdigi events available", ws.rawdigits_tree.event_list())
-    ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
     btp = BackTrackerPlotter(ws)
-    # some_collection_tps = ws.tps.query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid)).query('readout_plane_id==2 & samples_over_threshold==2 & bt_is_signal==1').iloc[0:4]
-    some_collection_tps = (
-        ws.tps
-        .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
-        .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
-        .iloc[0:6]
-    )
 
-    # print(some_collection_tps)
+
+    # print(some_rop2_tps)
 
     pf = Portfolio(output_dir, dataset_name)
 
@@ -80,7 +72,34 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str,
     pf.add_figure('start_time_dist_all_tps', tp_ana.draw_tp_start_sample_dist)
 
     pf.add_figure('bt_nel_eff_by_plane', btp.draw_nel_eff_by_plane)
-    pf.add_figure('bt_tp_vs_rawadc', btp.plot_tps_vs_ides, tps=some_collection_tps)
+
+    if ws.rawdigis_events:
+        print("Rawdigi events available", ws.rawdigis_events)
+        ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
+        some_rop0_tps = (
+            ws.tps
+            .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
+            .query('readout_plane_id==0 & samples_over_threshold<4 & bt_is_signal==1')
+            .iloc[0:6]
+        )
+
+        some_rop1_tps = (
+            ws.tps
+            .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
+            .query('readout_plane_id==1 & samples_over_threshold<4 & bt_is_signal==1')
+            .iloc[0:6]
+        )
+
+        some_rop2_tps = (
+            ws.tps
+            .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**ev_uid))
+            .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
+            .iloc[0:6]
+        )
+
+        pf.add_figure('bt_tp_vs_rawadc_rop0', btp.plot_tps_vs_ides, tps=some_rop0_tps)
+        pf.add_figure('bt_tp_vs_rawadc_rop1', btp.plot_tps_vs_ides, tps=some_rop1_tps)
+        pf.add_figure('bt_tp_vs_rawadc_rop2', btp.plot_tps_vs_ides, tps=some_rop2_tps)
 
 
     for threshold in (26, 36, 46, 56):
@@ -96,7 +115,9 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str,
 
     pf.add_figure('ides_time_dist_all_tps', plot_ides_time)
     # pf.add_figure('start_time_dist', tp_ana.draw_tp_start_sample_dist)
-    pf.add_figure('vs_elnoise_var_dist', tp_ana.draw_tp_signal_noise_dist)
+    pf.add_figure('vs_elnoise_var_dist_rop0', tp_ana.draw_tp_signal_noise_dist, roview=0)
+    pf.add_figure('vs_elnoise_var_dist_rop1', tp_ana.draw_tp_signal_noise_dist, roview=1)
+    pf.add_figure('vs_elnoise_var_dist_rop2', tp_ana.draw_tp_signal_noise_dist, roview=2)
 
     pf.add_figure('peakadc_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='adc_peak', downsampling=10, sharex=True, sharey=True, figsize=(12, 10))
     pf.add_figure('tot_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='samples_over_threshold', downsampling=1, log=False, sharex=True, sharey=True, figsize=(12, 10))
@@ -139,19 +160,21 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
     ts = _TAG_STYLES
     li_color = _COLOR_ORANGE
 
-    pdf.add_slide("Characterisation of the VD detector response to Ar39")
+    signal_label='Ar39'
+
+    pdf.add_slide(f"Characterisation of the VD detector response to {signal_label}")
     pdf.write_markdown(f"""
-    This report characterizes the detector response in simulation to Ar39 .
-    * Ar39 is uniformely generaterd inside the detector
-    * Ar39 spectrum has a 1 MeV endpoin
-    * Ar39 is the closest physics process to the TP threshold
+    This report characterizes the detector response in simulation to {signal_label} .
+    * {signal_label} is uniformely generaterd inside the detector
+    * {signal_label} spectrum has a 1 MeV endpoin
+    * {signal_label} is the closest physics process to the TP threshold
 
     Questions addressed in the report
-    1. What is the noise/Ar39 ADC distribution
-    1. Are the Ar39 that produce TPs uniformely distributed in the detector?
-    1. What are the effects of diffusion on Ar39? (Relevant since Ar39 is close to TP threshold)
-    1. What is the backtracking efficienct for the Ar39 sample
-    1. Is the rate of trigger primitives from Ar39 compatible with expectations?  
+    1. What is the noise/{signal_label} ADC distribution
+    1. Are the {signal_label} that produce TPs uniformely distributed in the detector?
+    1. What are the effects of diffusion on {signal_label}? (Relevant since {signal_label} is close to TP threshold)
+    1. What is the backtracking efficienct for the {signal_label} sample
+    1. Is the rate of trigger primitives from {signal_label} compatible with expectations?  
     """)    
     #--------------------------------------------------------------------------
     # Page 1 — title & data provenance
@@ -170,22 +193,9 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         """,
     )
 
-    # pdf.add_page()
-    # pdf.write_markdown("# Introduction", tag_styles=ts)
-
-    # pdf.write_markdown(f"""
-    # This notebook characterizes the detector response in simulation to Ar39-only .
-
-    # 1. Is the rate of trigger primitives from Ar39 compatible with the expectations
-
-    #     * Ar39 is uniformely generaterd inside the detector
-    #     * Ar39 spectrum has a 1 MeV endpoint,
-                       
-    # """)
-
     #--------------------------------------------------------------------------
     # Page 2 — ADC distributions
-    pdf.add_slide("Noise and AR39 signal distribution")
+    pdf.add_slide(f"Noise and {signal_label} signal distribution")
     pdf.image(pf.path('adc_dist'), w=pdf.epw)
     pdf.write_markdown(r"""
         ADC samples distributions per plane (integrated on the full dataset)
@@ -198,20 +208,33 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
 
     #--------------------------------------------------------------------------
     # Backtracking - TPs to IDEs
-    pdf.add_slide("Ar39 TPs backtracking to sim ides")
-    pdf.image(pf.path('bt_tp_vs_rawadc'), h=0.9*pdf.eph, x=Align.L)
-    pdf.set_xy(pdf.eph + 30, 30)
-    pdf.write_markdown("Examples of TP-SimIDE matching for TPs with sot=2")
+    if pf.has_figure('bt_tp_vs_rawadc_rop0'):
+        pdf.add_slide(f"{signal_label} TPs backtracking to sim ides (plane 0)")
+        pdf.image(pf.path('bt_tp_vs_rawadc_rop0'), h=0.9*pdf.eph, x=Align.L)
+        pdf.set_xy(pdf.eph + 30, 30)
+        pdf.write_markdown("Examples of TP-SimIDE matching for TPs with sot=2")
+
+    if pf.has_figure('bt_tp_vs_rawadc_rop1'):
+        pdf.add_slide(f"{signal_label} TPs backtracking to sim ides (plane 1)")
+        pdf.image(pf.path('bt_tp_vs_rawadc_rop1'), h=0.9*pdf.eph, x=Align.L)
+        pdf.set_xy(pdf.eph + 30, 30)
+        pdf.write_markdown("Examples of TP-SimIDE matching for TPs with sot=2")
+
+    if pf.has_figure('bt_tp_vs_rawadc_rop2'):
+        pdf.add_slide(f"{signal_label} TPs backtracking to sim ides (plane 2)")
+        pdf.image(pf.path('bt_tp_vs_rawadc_rop2'), h=0.9*pdf.eph, x=Align.L)
+        pdf.set_xy(pdf.eph + 30, 30)
+        pdf.write_markdown("Examples of TP-SimIDE matching for TPs with sot=2")
 
     #--------------------------------------------------------------------------
     # Backtracking - TPs to IDEs
-    pdf.add_slide("Ar39 TPs backtracking efficiency (in number of electrons)")
+    pdf.add_slide(f"{signal_label} TPs backtracking efficiency (in number of electrons)")
     pdf.image(pf.path('bt_nel_eff_by_plane'), w=0.9*pdf.epw, x=Align.C)
 
 
     #--------------------------------------------------------------------------
     # Page 3 — TP origin
-    pdf.add_slide("Ar39 TPs origin")
+    pdf.add_slide(f"{signal_label} TPs origin")
     pdf.image(pf.path('xyz_pos_dist_all_tps', 'png'), h=pdf.eph * 0.9, x=Align.L)
     pdf.set_xy(pdf.eph + 30, 30)
     pdf.write_markdown("Point of origin of TPs (`bt_primary_x`) tagged as signal, i.e. matching an IDE", tag_styles=ts)
@@ -295,9 +318,12 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
 
     #--------------------------------------------------------------------------
     # Page 8 — basic TP distributions
-    pdf.add_slide("# **Basic TP distribution**")
-    pdf.image(pf.path('vs_elnoise_var_dist'), w=pdf.epw, x=Align.C)
+    pdf.add_slide("Distributions of TP main variables")
+    pdf.image(pf.path('vs_elnoise_var_dist_rop0'), w=0.4*pdf.epw, x=Align.C)
+    pdf.image(pf.path('vs_elnoise_var_dist_rop1'), w=0.4*pdf.epw, x=Align.C)
+    pdf.image(pf.path('vs_elnoise_var_dist_rop2'), w=0.4*pdf.epw, x=Align.C)
 
+    #--------------------------------------------------------------------------
     # Page 13 — stacked distributions
     pdf.add_slide('Stacked TP distributions', subtitle='Bins of `bt_primary_x` - Plane 2 (X, collection)')
     pdf.set_y(pdf.eph // 3)
@@ -314,6 +340,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         """
     )
 
+    #--------------------------------------------------------------------------
     # Pages 10-12 — distributions in drift bins
     for name, title, subtitle in [
         ('peakadc_dist_in_drift_bins', 'Distribution of TP adc_peak across the drift','Bins of `bt_primary_x` - Plane 2 (X, collection)'),
@@ -325,6 +352,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
 
 
 
+    #--------------------------------------------------------------------------
     # Pages 14-16 — cut sequence effects
     for name, title in [
         ('dists_with_peakadc_cuts', 'Effects of adc_peak cuts on distributions'),
@@ -335,6 +363,7 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
         pdf.image(pf.path(name), h=pdf.eph * 0.85, x=Align.L)
         pdf.set_xy(pdf.eph + 30, 30)
 
+    #--------------------------------------------------------------------------
     # Pages 17-19 — threshold scan performance
     for name, title in [
         ('peak_thresh_scan_perf', 'PeakADC cut noise rejection efficiency'),

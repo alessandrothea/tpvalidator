@@ -4,16 +4,132 @@ from ..workspace import TriggerPrimitivesWorkspace
 import numpy as np
 import matplotlib.pyplot as plt
 import hist
-import particle
 import mplhep as hep
 
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional
 from rich.table import Table
 from ..detector_geometry import FDVDGeometry_1x8x14
+from ..analysis.histograms import compute_regaxis_specs
 from matplotlib.colors import LogNorm
 
 
+
 class TrgPrimitivesPlotter:
+    
+    _electronics_noise_label : str = 'DetectorElectronics'
+
+    def __init__(
+        self,
+        ws: TriggerPrimitivesWorkspace,
+        geo: Literal['1x8x14']='1x8x14'
+    ):
+        """Initialise the plotter.
+
+        Parameters
+        ----------
+        ws:
+            Workspace instance.
+        collection:
+            ``'mctruths'`` or ``'mcparticles'``.
+        """
+        self.ws = ws
+        
+        # Shortcut
+        self._df = ws.tps
+
+        # Initialize block map
+        self._init_tp_origin_block_map()
+
+        self._init_det_geo(geo)
+
+    
+    def _init_det_geo(self, geo: Literal['1x8x14']):
+        # Private variables
+        match geo:
+            case '1x8x14':
+                self._geo = FDVDGeometry_1x8x14
+            case _:
+                raise ValueError(f'Illegal geo value. Received {geo} expected [1x8x14]')
+
+
+    def simulated_time(self) -> float:
+        """Return total simulated time in seconds.
+
+        Computed as ``2 × readout_window × num_entries × 0.5 µs``, where the
+        factor of 2 accounts for pre- and post-spill readout windows.
+        Always derived from ``ws.mctruths`` regardless of the active
+        collection.
+        """
+        
+        sampling_time = 0.5e-6  # Sampling time 1/2 usec
+        ro_win = self._df.extra_info['readout_window']
+        num_entries = self._df.extra_info['num_entries']
+        return ro_win * sampling_time * num_entries
+
+    def _init_tp_origin_block_map(self):
+        """Initialize the tp origin block registry
+
+        The origin is either a MC sample (backtracked TPs)
+        or "DetectorElectronics" (non-backtracked TPs)
+        """
+        block_map = self.ws.mctruth_blocks_map.copy()
+        block_map[-99999] = self._electronics_noise_label
+        self.block_map = block_map
+
+
+    def _make_int_axis(self, col_name:str, **kwargs):
+        """
+        Helper method to create integer axis form a dataframe column
+
+        TODO: refactor to a helper module
+        """
+
+        df = self._df
+        if df[col_name].dtype.kind not in ("i", "u"):
+            raise TypeError(f"Column {col_name} is not of type integer")
+
+        values = df[col_name].values
+        lo, hi = np.min(values), np.max(values)
+        return hist.axis.Integer(lo, hi+1, name=col_name, **kwargs)
+
+
+    def _make_intcat_axis(self, col_name:str, **kwargs):
+        """
+        Helper method to create category integer axis form a dataframe
+
+        TODO: refactor to a helper module
+        """
+
+        df = self._df
+        if df[col_name].dtype.kind not in ("i", "u"):
+            raise TypeError(f"Column {col_name} is not of type integer")
+
+        return hist.axis.IntCategory(sorted(d
+                                            f[col_name].unique()), name=col_name, **kwargs)
+    
+    def _make_regaxis(self, col_name:str, **kwargs):
+        df = self._df
+        if df[col_name].dtype.kind not in ("i", "u", "f"):
+            raise TypeError(f"Column {col_name} is not of type numeric")
+        
+        return hist.axis.Regular( *compute_regaxis_specs(df[col_name], 10), name=col_name)
+
+
+    def _build_histogram(self, axes):
+
+        h = hist.Hist(*axes)
+
+        kwa = {
+            a.name: self._df[a.name]
+            for a in axes
+        }
+        h.fill(**kwa)
+
+        return h
+
+
+
+class TrgPrimitivesPlotterV0:
     
     _electronics_noise_label : str = 'ElecNoise'
 
@@ -33,9 +149,9 @@ class TrgPrimitivesPlotter:
         """
         self.ws = ws
         self.df = ws.tps
-        block_map = self.ws.mctruth_blocks_map.copy()
-        block_map[-99999] = self._electronics_noise_label
-        self.block_map = block_map
+
+        # Initialize block map
+        self._init_block_map()
 
         
         # Private variables
@@ -60,7 +176,15 @@ class TrgPrimitivesPlotter:
         num_entries = self.df.extra_info['num_entries']
         return ro_win * sampling_time * num_entries
 
+    def _init_block_map(self):
+        block_map = self.ws.mctruth_blocks_map.copy()
+        block_map[-99999] = self._electronics_noise_label
+        self.block_map = block_map
 
+
+
+
+    #---- 
 
     def _make_groups(self, df, 
                      by:Literal['generator_name', 'truth_block_id', 'signal_noise'],
@@ -185,7 +309,8 @@ class TrgPrimitivesPlotter:
 
         fig, ax = plt.subplots(figsize=figsize)
         # hep.histplot(h, yerr=False, histtype='fill', ax=ax)
-        hep.hist2dplot(h, ax=ax, norm=c_norm)
+        artists = hep.hist2dplot(h, ax=ax, norm=c_norm)
+        artists.cbar.set_label("Rate [Hz]")
         # ax.grid(visible=True)
         ax.tick_params(axis='x', rotation=90)
         ax.set_ylabel('Readout Plane')

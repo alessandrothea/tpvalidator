@@ -6,9 +6,10 @@ import particle
 import mplhep as hep
 
 from rich.table import Table
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional
 from matplotlib.colors import LogNorm
 
+from ..detector_geometry import FDVDGeometry_1x8x14
 from ..workspace import TriggerPrimitivesWorkspace
 
 
@@ -32,6 +33,7 @@ class MCPlotter:
         self,
         ws: TriggerPrimitivesWorkspace,
         collection: Literal['mctruths', 'mcparticles'] = 'mctruths',
+        geo: Literal['1x8x14']='1x8x14',
     ):
         """Initialise the plotter.
 
@@ -48,6 +50,18 @@ class MCPlotter:
         
         # Private variables
         self._groups_by_generator = None
+
+        self._init_det_geo(geo)
+
+    
+    def _init_det_geo(self, geo: Literal['1x8x14']):
+        # Private variables
+        match geo:
+            case '1x8x14':
+                self._geo = FDVDGeometry_1x8x14
+            case _:
+                raise ValueError(f'Illegal geo value. Received {geo} expected [1x8x14]')
+
 
     # ── Collection helpers ────────────────────────────────────────────────────
 
@@ -396,7 +410,7 @@ class MCPlotter:
 
     # ── Origin — plots ────────────────────────────────────────────────────
 
-    def plot_generator_pos(self, axis: Literal['x', 'y', 'z'], n_top: Optional[int] = 10,
+    def plot_generator_origin(self, axis: Literal['x', 'y', 'z'], n_top: Optional[int] = 10, bin_width_cm: int = 50,
                                  c_scale: Literal['lin', 'log'] = 'lin', figsize: tuple = (8, 8)):
         """Plot a generator × position 2D histogram for the active collection.
 
@@ -417,8 +431,7 @@ class MCPlotter:
 
         v_min = df[axis].min()
         v_max = df[axis].max()
-        bin_width = 50  # cm
-        n_bins_v = int((v_max - v_min) // bin_width)
+        n_bins_v = int((v_max - v_min) // bin_width_cm)
         hist_v = self._build_pos_hist(axis, groups, n_bins_v, v_min, v_max)
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -429,12 +442,14 @@ class MCPlotter:
                 c_norm = None
             case _:
                 raise RuntimeError(f"Unexpected c_scale value {c_scale!r} ('lin', 'log')")
-        hep.hist2dplot(hist_v, ax=ax, norm=c_norm)
+        artists = hep.hist2dplot(hist_v, ax=ax, norm=c_norm)
+        artists.cbar.set_label("Counts")
+
         ax.tick_params(axis='x', rotation=90)
         fig.tight_layout()
         return fig
 
-    def plot_generator_origin_2d(self, name: str, plane: Literal['xy', 'yz', 'xz'],
+    def plot_generator_2d_origin(self, name: str, plane: Literal['xy', 'yz', 'xz'],
                                        bin_width: int = 50, c_scale: str = 'lin',
                                        figsize: tuple = (8, 8)):
         """Plot the 2D spatial origin of a single generator in the active collection.
@@ -477,11 +492,12 @@ class MCPlotter:
                 norm = None
             case _:
                 raise RuntimeError(f"Unexpected c_scale value {c_scale!r} ('lin', 'log')")
-        hep.hist2dplot(h, ax=ax, norm=norm)
+        artists = hep.hist2dplot(h, ax=ax, norm=norm)
+        artists.cbar.set_label("Counts")
         fig.tight_layout()
         return fig
 
-    def plot_generator_pos_ke(self, name: str, figsize: tuple = (8, 8)):
+    def plot_generator_pos_ke(self, gen_name: Optional[str] = None, figsize: tuple = (8, 8)):
         """Plot x, y, z position distributions and KE spectrum for a single generator.
 
         Produces a 2×2 grid: x (top-left), y (top-right), z (bottom-left),
@@ -489,13 +505,13 @@ class MCPlotter:
 
         Parameters
         ----------
-        name:
-            Generator name (must be a value in ``ws.mctruth_blocks_map``).
+        gen_name:
+            Generator gen_name (must be a value in ``ws.mctruth_blocks_map``).
         figsize:
             Figure size passed to ``plt.subplots``.
         """
-        if name not in self.ws.mctruth_blocks_map.values():
-            raise RuntimeError(f"Generator {name} not found.")
+        if gen_name is not None and gen_name not in self.ws.mctruth_blocks_map.values():
+            raise RuntimeError(f"Generator {gen_name} not found.")
 
         df = self.df
         groups = self._make_groups(df, self._generator_by)
@@ -512,23 +528,25 @@ class MCPlotter:
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
 
+        gen_sel = gen_name if gen_name is not None else sum
+
         ax = axes[0][0]
-        hep.histplot(h_pos['x'][name, :], histtype='fill', ax=ax)
+        hep.histplot(h_pos['x'][gen_sel, :], histtype='fill', ax=ax)
         ax.set_ylabel('counts')
         ax.grid(visible=True)
 
         ax = axes[0][1]
-        hep.histplot(h_pos['y'][name, :], histtype='fill', ax=ax)
+        hep.histplot(h_pos['y'][gen_sel, :], histtype='fill', ax=ax)
         ax.set_ylabel('counts')
         ax.grid(visible=True)
 
         ax = axes[1][0]
-        hep.histplot(h_pos['z'][name, :], histtype='fill', ax=ax)
+        hep.histplot(h_pos['z'][gen_sel, :], histtype='fill', ax=ax)
         ax.set_ylabel('counts')
         ax.grid(visible=True)
 
         ax = axes[1][1]
-        hep.histplot(h_ke[name, :], histtype='fill', ax=ax)
+        hep.histplot(h_ke[gen_sel, :], histtype='fill', ax=ax)
         ax.set_ylabel('counts')
         ax.set_yscale('log')
         ax.grid(visible=True)
@@ -538,7 +556,7 @@ class MCPlotter:
 
     # ── Distributions ─────────────────────────────────────────────────────────
 
-    def plot_distributions(self, bins: int = 100, figsize: tuple = (14, 14)):
+    def plot_distributions(self, gen_name: Optional[str] = None, bins: int = 100, figsize: tuple = (14, 14)):
         """Plot histograms of all numeric columns in the active collection.
 
         Parameters
@@ -548,8 +566,54 @@ class MCPlotter:
         figsize:
             Figure size passed to ``plt.subplots``.
         """
+        df = self.df
+        if gen_name is not None:
+            if gen_name not in self.ws.mctruth_blocks_map.values():
+                raise RuntimeError(f"Generator {gen_name} not found.")
+            else:
+                groups = self._make_groups(df, self._generator_by)
+                df = groups[gen_name]
+
         fig, ax = plt.subplots(figsize=figsize)
-        self.df.hist(ax=ax, bins=bins)
+        df.hist(ax=ax, bins=bins)
         fig.suptitle(f"{self.collection} distributions")
         fig.tight_layout()
         return fig
+    
+    def generetor_area_info(self, gen_name: Optional[str] = None):
+
+
+        df = self.df
+        if gen_name is not None:
+            if gen_name not in self.ws.mctruth_blocks_map.values():
+                raise RuntimeError(f"Generator {gen_name} not found.")
+            else:
+                groups = self._make_groups(df, self._generator_by)
+                df = groups[gen_name]
+
+        gen_region_info = {
+            'sides': {}
+        }
+        vol = 1
+        for v in ['x', 'y', 'z']:
+            # mion max in meters
+            v_min, v_max = df[v].min(), df[v].max()
+            l =  (v_max - v_min)
+            gen_region_info['sides'][v] = {
+                'unit': 'cm',
+                'length': l,
+                'min': v_min,
+                'max': v_max,
+            }
+            vol *= l
+        t_min, t_max = df['t'].min()/1000, df['t'].max()/1000
+        delta_t = t_max-t_min
+        gen_region_info['time'] = {
+            'unit': 'us',
+            'min': t_min,
+            'max': t_max,
+            'delta': delta_t
+        }
+        
+        gen_region_info['volume'] = vol
+        return gen_region_info

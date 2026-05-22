@@ -72,7 +72,10 @@ def load_datasets(dataset_dir: str, selection: Optional[List[str]] = None) -> di
     datasets = {}
     for name, entry in cfg.datasets_spec.items():
         if selection and name not in selection:
+            print(f"Workspace {name} skipped")
             continue
+
+        print(f"Loading {name}")
         ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file, extra_info=cfg.dataset_info)
         if entry.rawadc_file:
             print(f"Adding {entry.rawadc_file}")
