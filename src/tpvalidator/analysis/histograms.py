@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, Optional
 
 import boost_histogram as bh
 import hist
@@ -13,75 +13,74 @@ type Quantiles = float | Sequence[float]
 
 
 
+#--------------------------------------------------------------------------
+# Genearl purpose methods
+#
+def _make_int_axis(df, col_name:str, **kwargs):
+    """
+    Helper method to create integer axis form a dataframe column
 
-# def hist_mean_cov_uhi(
-#     h, *, flow: bool = False
-# ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-#     """
-#     Compute mean vector and covariance matrix for an N-D UHI histogram
-#     using bin centers and bin contents as weights.
+    TODO: refactor to a helper module
+    """
 
-#     Parameters
-#     ----------
-#     h
-#         Any UHI histogram (boost-histogram, hist, etc.)
-#     flow
-#         If False (recommended): ignore under/overflow bins entirely.
-#         If True: include under/overflow bins ONLY in the total normalization;
-#                  moments are still computed using the regular-bin region only
-#                  (since flow bins do not have well-defined coordinates).
+    if df[col_name].dtype.kind not in ("i", "u"):
+        raise TypeError(f"Column {col_name} is not of type integer")
 
-#     Returns
-#     -------
-#     mean : np.ndarray
-#         Shape (ndim,) mean vector.
-#     cov : np.ndarray
-#         Shape (ndim, ndim) covariance matrix.
-#     std : np.ndarray
-#         Shape (ndim,) standard deviation per axis (sqrt(diag(cov))).
-#     """
-#     ndim = len(h.axes)
-#     if ndim == 0:
-#         raise ValueError("Histogram has no axes.")
+    values = df[col_name].values
+    lo, hi = np.min(values), np.max(values)
+    return hist.axis.Integer(lo, hi+1, name=col_name, **kwargs)
 
-#     w_core = np.asarray(h.values(flow=False), dtype=float)
-#     core_sum = float(w_core.sum())
 
-#     if flow:
-#         w_total = float(np.asarray(h.values(flow=True), dtype=float).sum())
-#     else:
-#         w_total = core_sum
+def _make_intcat_axis(df, col_name:str, **kwargs):
+    """
+    Helper method to create category integer axis form a dataframe
 
-#     if w_total <= 0.0 or core_sum <= 0.0:
-#         mean = np.full((ndim,), np.nan)
-#         cov = np.full((ndim, ndim), np.nan)
-#         std = np.full((ndim,), np.nan)
-#         return mean, cov, std
+    TODO: refactor to a helper module
+    """
 
-#     centers = [np.asarray(ax.centers, dtype=float) for ax in h.axes]
-#     shape = w_core.shape
+    if df[col_name].dtype.kind not in ("i", "u"):
+        raise TypeError(f"Column {col_name} is not of type integer")
 
-#     # Broadcast each axis's centers to the full grid shape without meshgrid
-#     bc = []
-#     for i in range(ndim):
-#         rshape = [1] * ndim
-#         rshape[i] = shape[i]
-#         bc.append(centers[i].reshape(rshape))
+    return hist.axis.IntCategory(sorted(df[col_name].unique()), name=col_name, **kwargs)
 
-#     mean = np.empty((ndim,), dtype=float)
-#     for i in range(ndim):
-#         mean[i] = float(np.sum(w_core * bc[i]) / w_total)
 
-#     exx = np.empty((ndim, ndim), dtype=float)
-#     for i in range(ndim):
-#         for j in range(i, ndim):
-#             exx_ij = float(np.sum(w_core * bc[i] * bc[j]) / w_total)
-#             exx[i, j] = exx_ij
-#             exx[j, i] = exx_ij
+def _make_regaxis(df, col_name:str, bin_size:int, **kwargs):
+    if df[col_name].dtype.kind not in ("i", "u", "f"):
+        raise TypeError(f"Column {col_name} is not of type numeric")
+    
+    return hist.axis.Regular( *compute_regaxis_specs(df[col_name], bin_size), name=col_name, **kwargs)
 
-#     cov = exx - np.outer(mean, mean)
-#     std = np.sqrt(np.clip(np.diag(cov), 0.0, None))
-#     return mean, cov, std
+
+
+def _build_histogram(df, axes:list, weight: Optional[str]=None):
+    """Build an histogram from a collection of axes
+
+    Args:
+        axes (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    h = hist.Hist(*axes)
+
+    kwa = {
+        a.name: df[a.name]
+        for a in axes
+    }
+
+    if weight is not None:
+        kwa['weight'] = df[weight]
+
+    h.fill(**kwa)
+
+    return h
+
+#
+# Genearl purpose methods
+#--------------------------------------------------------------------------
+
+
 
 # TODO: review 
 def hist_mean_std_uhi(h, *, flow: bool = False) -> tuple[float, float]:
@@ -448,14 +447,162 @@ def cumsum_hist(
         cum = cum / norm
 
     axis = h.axes[0]
-    out_axis = hist.axis.Variable(
+    use_under = flow and direction == "left"
+    use_over  = flow and direction == "right"
+
+    cum_axis = hist.axis.Variable(
         axis.edges,
         name=axis.name,
         label=getattr(axis, "label", None),
-        underflow=False,
-        overflow=False,
+        underflow=use_under,
+        overflow=use_over,
     )
-    cum_hist = hist.Hist(out_axis, storage=hist.storage.Weight())
-    cum_hist.view().value    = cum
-    cum_hist.view().variance = cum_vars
+    cum_hist = hist.Hist(cum_axis, storage=hist.storage.Weight())
+    v = cum_hist.view(flow=flow)
+    s = slice(1, None) if use_under else (slice(None, -1) if use_over else slice(None))
+    v.value[s],    v.variance[s]    = cum,   cum_vars
+    if use_under:
+        v.value[0],  v.variance[0]  = under, under_var
+    if use_over:
+        v.value[-1], v.variance[-1] = over,  over_var
+
     return cum_hist
+
+
+def _ax_slice(arr: np.ndarray, s, k: int) -> np.ndarray:
+    idx = [slice(None)] * arr.ndim
+    idx[k] = s
+    return arr[tuple(idx)]
+
+
+def cumsum_hist_nd(
+    h: hist.Hist,
+    axis: str | int,
+    direction: Literal["left", "right"] = "left",
+    normalise: bool = False,
+    flow: bool = False,
+) -> hist.Hist:
+    """
+    Compute the cumulative sum of an ND hist.Hist along one named or indexed axis.
+
+    Parameters
+    ----------
+    h         : source histogram
+    axis      : axis name (str) or index (int) along which to cumulate
+    direction : 'left'  → cumsum low-to-high (events below threshold)
+                'right' → cumsum high-to-low (events above threshold)
+    normalise : if True, scale each slice to [0, 1] along the cumsum axis
+    flow      : if True, include under/overflow bins along the cumsum axis
+
+    Returns
+    -------
+    A new hist.Hist with the same axes as the source.
+    """
+    if isinstance(axis, str):
+        names = [ax.name for ax in h.axes]
+        if axis not in names:
+            raise ValueError(f"Axis '{axis}' not found. Available: {names}")
+        k = names.index(axis)
+    else:
+        if not 0 <= axis < h.ndim:
+            raise ValueError(f"axis index {axis} out of range for {h.ndim}D histogram.")
+        k = axis
+
+    vals_all = np.asarray(h.values(flow=flow), dtype=float)
+    variances = h.variances(flow=flow) if flow else h.variances()
+    vars_all = np.asarray(variances, dtype=float) if variances is not None else np.zeros_like(vals_all)
+
+    if flow:
+        under     = _ax_slice(vals_all, slice(0, 1),    k)
+        vals      = _ax_slice(vals_all, slice(1, -1),   k)
+        over      = _ax_slice(vals_all, slice(-1, None), k)
+        under_var = _ax_slice(vars_all, slice(0, 1),    k)
+        vars_     = _ax_slice(vars_all, slice(1, -1),   k)
+        over_var  = _ax_slice(vars_all, slice(-1, None), k)
+    else:
+        shape_1 = list(vals_all.shape)
+        shape_1[k] = 1
+        under = over = np.zeros(shape_1)
+        under_var = over_var = np.zeros(shape_1)
+        vals  = vals_all
+        vars_ = vars_all
+
+    if direction == "left":
+        cum      = np.cumsum(vals,  axis=k) + under
+        cum_vars = np.cumsum(vars_, axis=k) + under_var
+        norm = _ax_slice(cum, slice(-1, None), k) + over
+    elif direction == "right":
+        cum      = np.flip(np.cumsum(np.flip(vals,  k), k), k) + over
+        cum_vars = np.flip(np.cumsum(np.flip(vars_, k), k), k) + over_var
+        norm = _ax_slice(cum, slice(0, 1), k) + under
+    else:
+        raise ValueError(f"direction must be 'left' or 'right', got '{direction}'.")
+
+    if normalise:
+        safe_norm = np.where(norm != 0, norm, 1.0)
+        cum_vars  = np.where(norm != 0, cum_vars / safe_norm ** 2, 0.0)
+        cum       = np.where(norm != 0, cum / safe_norm, 0.0)
+
+    use_under = flow and direction == "left"
+    use_over  = flow and direction == "right"
+    new_axes = []
+    for i, a in enumerate(h.axes):
+        if i == k:
+            new_axes.append(hist.axis.Variable(
+                a.edges,
+                name=a.name,
+                label=getattr(a, "label", None),
+                underflow=use_under,
+                overflow=use_over,
+            ))
+        else:
+            new_axes.append(a)
+
+    result = hist.Hist(*new_axes, storage=hist.storage.Weight())
+    v = result.view(flow=flow)
+
+    def _idx(s):
+        idx = [slice(None)] * h.ndim
+        idx[k] = s
+        return tuple(idx)
+
+    s = slice(1, None) if use_under else (slice(None, -1) if use_over else slice(None))
+    v.value[_idx(s)]    = cum
+    v.variance[_idx(s)] = cum_vars
+    if use_under:
+        v.value[_idx(0)]    = under.squeeze(axis=k)
+        v.variance[_idx(0)] = under_var.squeeze(axis=k)
+    if use_over:
+        v.value[_idx(-1)]    = over.squeeze(axis=k)
+        v.variance[_idx(-1)] = over_var.squeeze(axis=k)
+
+    return result
+
+
+
+def cut_scan_to_df(h, cat_axis_name, cut_axis_name):
+    """Pivot a 2D cut-scan histogram into a wide-format DataFrame.
+
+    Each row corresponds to one edge of the cut axis; each category in
+    `cat_axis_name` becomes a column named ``<cat_axis>_<category>``.
+    The cut-axis edges are stored in a column named ``<cut_axis>_min``.
+
+    Args:
+        h: boost-histogram / hist.Hist with at least two axes.
+        cat_axis_name: Name of the categorical (StrCategory) axis to pivot on.
+        cut_axis_name: Name of the variable/regular axis whose edges define the
+            cut values (e.g. a threshold or ADC cut).
+
+    Returns:
+        pd.DataFrame with one row per cut-axis edge and one column per category,
+        plus the cut-axis edge column.
+    """
+    cat = h.axes[cat_axis_name]
+
+    cuts = h.axes[cut_axis_name].edges
+
+    data = {f'{cut_axis_name}_min': cuts}
+
+    for k in cat:
+        data[f'{cat_axis_name}_{k}'] = h[{cat_axis_name: k}].values(flow=True)
+    return pd.DataFrame(data)

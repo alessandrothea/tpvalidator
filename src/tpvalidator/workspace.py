@@ -216,7 +216,7 @@ class TriggerPrimitivesWorkspace:
         tree = getattr(self, f'{df_id}_tree')
         df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
         if 'event_uid' not in df.columns:
-            df['event_uid'] = df.run*1000000+df.subrun*100+df.event
+            df['event_uid'] = df.run.astype("uint64")*1000000+df.subrun.astype("uint64")*100+df.event.astype("uint64")
         df.prod_info = self.info
         df.extra_info = self._extra_info
         return df
@@ -333,7 +333,6 @@ class TriggerPrimitivesWorkspace:
     #
     def add_rawdigits(self, data_path: str):
         """Add a rawdigits (rawadcs) file to the workspace."""
-        # self._rawdigits_path = data_path
 
         self._raw_tuple_rdr = RawWaveformsNtupleReader(data_path)
 

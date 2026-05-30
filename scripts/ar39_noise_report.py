@@ -115,17 +115,19 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, dataset_name: str,
 
     pf.add_figure('ides_time_dist_all_tps', plot_ides_time)
     # pf.add_figure('start_time_dist', tp_ana.draw_tp_start_sample_dist)
-    pf.add_figure('vs_elnoise_var_dist_rop0', tp_ana.draw_tp_signal_noise_dist, roview=0)
-    pf.add_figure('vs_elnoise_var_dist_rop1', tp_ana.draw_tp_signal_noise_dist, roview=1)
-    pf.add_figure('vs_elnoise_var_dist_rop2', tp_ana.draw_tp_signal_noise_dist, roview=2)
+    for rop_id in range(3):
+        pf.add_figure('vs_elnoise_var_dist_rop0', tp_ana.draw_tp_signal_noise_dist, roview=rop_id)
 
-    pf.add_figure('peakadc_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='adc_peak', downsampling=10, sharex=True, sharey=True, figsize=(12, 10))
-    pf.add_figure('tot_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='samples_over_threshold', downsampling=1, log=False, sharex=True, sharey=True, figsize=(12, 10))
-    pf.add_figure('sadc_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='adc_integral', downsampling=100, sharex=True, sharey=True, figsize=(12, 10))
+    pf.add_figure('peakadc_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='adc_peak', bin_size=10, sharex=True, sharey=True, figsize=(12, 10))
+    pf.add_figure('tot_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='samples_over_threshold', bin_size=1, log=False, sharex=True, sharey=True, figsize=(12, 10))
+    pf.add_figure('sadc_dist_in_drift_bins', tp_ana.draw_variable_in_drift_grid, var='adc_integral', bin_size=100, sharex=True, sharey=True, figsize=(12, 10))
 
-    pf.add_figure('peak_dist_stack_in_drift_bins', tp_ana.draw_variable_drift_stack, var='adc_peak', downsampling=5, n_x_bins=5, log=True, figsize=(5, 4))
-    pf.add_figure('tot_dist_stack_in_drift_bins', tp_ana.draw_variable_drift_stack, var='samples_over_threshold', downsampling=1, n_x_bins=5, log=False, figsize=(5, 4))
-    pf.add_figure('sadc_dist_stack_in_drift_bins', tp_ana.draw_variable_drift_stack, var='adc_integral', downsampling=5, n_x_bins=5, log=True, figsize=(5, 4))
+
+
+    for rop_id in range(3):
+        pf.add_figure(f'peak_dist_stack_in_drift_bins_rop{rop_id}', tp_ana.draw_variable_drift_stack, var='adc_peak', roview=rop_id, bin_size=5, n_x_bins=5, log=True, figsize=(5, 4))
+        pf.add_figure(f'tot_dist_stack_in_drift_bins_rop{rop_id}', tp_ana.draw_variable_drift_stack, var='samples_over_threshold', roview=rop_id, bin_size=1, n_x_bins=5, log=False, figsize=(5, 4))
+        pf.add_figure(f'sadc_dist_stack_in_drift_bins_rop{rop_id}', tp_ana.draw_variable_drift_stack, var='adc_integral', roview=rop_id, bin_size=5, n_x_bins=5, log=True, figsize=(5, 4))
 
     cuts = list(range(26, 50, 5))
     pf.add_figure('dists_with_peakadc_cuts', tp_ana.draw_variable_cut_sequence, var='adc_peak', thresholds=cuts, log=True, figsize=(15, 10))
@@ -318,27 +320,28 @@ def write_report(pf: Portfolio, notes: dict, report_file: Path) -> None:
 
     #--------------------------------------------------------------------------
     # Page 8 — basic TP distributions
-    pdf.add_slide("Distributions of TP main variables")
-    pdf.image(pf.path('vs_elnoise_var_dist_rop0'), w=0.4*pdf.epw, x=Align.C)
-    pdf.image(pf.path('vs_elnoise_var_dist_rop1'), w=0.4*pdf.epw, x=Align.C)
-    pdf.image(pf.path('vs_elnoise_var_dist_rop2'), w=0.4*pdf.epw, x=Align.C)
+    for rop_id in range(3):
+        pdf.add_slide("Distributions of TP main variables", subtitle=f'Plane {rop_id}')
+        pdf.image(pf.path(f'vs_elnoise_var_dist_rop{rop_id}'), w=pdf.epw, x=Align.C)
 
     #--------------------------------------------------------------------------
     # Page 13 — stacked distributions
-    pdf.add_slide('Stacked TP distributions', subtitle='Bins of `bt_primary_x` - Plane 2 (X, collection)')
-    pdf.set_y(pdf.eph // 3)
-    x, y = pdf.get_x(), pdf.get_y()
-    pdf.image(pf.path('peak_dist_stack_in_drift_bins'), w=pdf.epw // 3)
-    pdf.set_y(y)
-    pdf.image(pf.path('tot_dist_stack_in_drift_bins'), w=pdf.epw // 3, x=x + pdf.epw // 3)
-    pdf.set_y(y)
-    pdf.image(pf.path('sadc_dist_stack_in_drift_bins'), w=pdf.epw // 3, x=x + 2 * pdf.epw // 3)
-    pdf.write_markdown(
-        """
-        Comparison of adc_peak, samples_over_threshold and adc_integral in 5 regions of `bt_primary_x` for the collection plane.
-        The distorsion due to dispersion is clearly visible
-        """
-    )
+    for rop_id in range(3):
+
+        pdf.add_slide('Stacked TP distributions', subtitle=f'Bins of `bt_primary_x` - Plane {rop_id}')
+        pdf.set_y(pdf.eph // 3)
+        x, y = pdf.get_x(), pdf.get_y()
+        pdf.image(pf.path(f'peak_dist_stack_in_drift_bins_rop{rop_id}'), w=pdf.epw // 3)
+        pdf.set_y(y)
+        pdf.image(pf.path(f'tot_dist_stack_in_drift_bins_rop{rop_id}'), w=pdf.epw // 3, x=x + pdf.epw // 3)
+        pdf.set_y(y)
+        pdf.image(pf.path(f'sadc_dist_stack_in_drift_bins_rop{rop_id}'), w=pdf.epw // 3, x=x + 2 * pdf.epw // 3)
+        pdf.write_markdown(
+            f"""
+            Comparison of adc_peak, samples_over_threshold and adc_integral in 5 regions of `bt_primary_x` for plane {rop_id}.
+            The distorsion due to dispersion is clearly visible
+            """
+        )
 
     #--------------------------------------------------------------------------
     # Pages 10-12 — distributions in drift bins

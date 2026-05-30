@@ -324,7 +324,7 @@ class TPSignalNoiseAnalyzer:
         n_bins=(tps.all.sample_start.max()-tps.all.sample_start.min())//100
 
         ax=axes[0]
-        ax.hist([tps.sig_p0.sample_start,tps.noise_p0.sample_start], stacked=True, bins=n_bins, log=True)
+        ax.hist([tps.sig_view0.sample_start,tps.noise_p0.sample_start], stacked=True, bins=n_bins, log=True)
         ax.set_title('Plane U [0]')
         ax.set_xlabel('TP peak time sample')
         ax.set_ylabel('counts')
@@ -482,18 +482,18 @@ class TPSignalNoiseAnalyzer:
     #     return fig
     
 
-    def draw_variable_in_drift_grid(self, var, view=2, n_x_bins=30, downsampling=10, log=False, sharex=False, sharey=False, figsize=(10,8)):
+    def draw_variable_in_drift_grid(self, var, roview=2, n_x_bins=30, bin_size=10, log=False, sharex=False, sharey=False, figsize=(10,8)):
 
         tps=self.tp_sel
         # Split the dataset into bins by depth
-        g = tps.sig_by_view[view].groupby(pd.cut(tps.sig_by_view[view].bt_primary_x, n_x_bins), observed=False)
+        g = tps.sig_by_view[roview].groupby(pd.cut(tps.sig_by_view[roview].bt_primary_x, n_x_bins), observed=False)
 
         fig, axes = subplot_autogrid(len(g), figsize=figsize, sharex=sharex, sharey=sharey)
 
         col=f'{var}'
 
         # bins = [ (x_min + i*dx) for i in range(n_bins+1)]
-        bins=linspace(tps.all_by_view[view][col], downsampling)
+        bins=linspace(tps.all_by_view[roview][col], bin_size)
 
         for k, (i, df) in enumerate(g):
             ax = axes[k]
@@ -501,15 +501,15 @@ class TPSignalNoiseAnalyzer:
             ax.set_title(f"{i.left:.0f} < x < {i.right:.0f}")
             ax.set_xlabel(var)
 
-        fig.suptitle(f"{var} - view {view}")
+        fig.suptitle(f"{var} - view {roview}")
         fig.tight_layout()
         return fig
     
-    def draw_tps_per_track_in_drift_grid(self, view=2, n_x_bins=30, sharex=False, sharey=False, figsize=(10,8)):
+    def draw_tps_per_track_in_drift_grid(self, roview: int=2, n_x_bins: int=30, sharex:bool=False, sharey:bool=False, figsize:tuple=(10,8)):
         """Draw the TP multiplicity per primary track id in bins of x (drift coordinate)
 
         Args:
-            view (int, optional): _description_. Defaults to 2.
+            roview (int, optional): _description_. Defaults to 2.
             n_x_bins (int, optional): _description_. Defaults to 30.
             sharex (bool, optional): _description_. Defaults to False.
             sharey (bool, optional): _description_. Defaults to False.
@@ -519,7 +519,7 @@ class TPSignalNoiseAnalyzer:
             _type_: _description_
         """
 
-        df_tps = self.tp_sel.sig_by_view[view]
+        df_tps = self.tp_sel.sig_by_view[roview]
         # df_tps = df_tps.query('adc_peak > 36')
         df_tps = df_tps.assign(x_bin=pd.cut(df_tps["bt_primary_x"], bins=n_x_bins))
 
@@ -549,23 +549,25 @@ class TPSignalNoiseAnalyzer:
             ax.set_xlabel("# TPs / track")
 
 
-        fig.suptitle(f"TP multiplicity per track - view {view}")
+        fig.suptitle(f"TP multiplicity per track - view {roview}")
 
         fig.tight_layout()
         return fig
         
 
-    def draw_variable_drift_stack(self, var, n_x_bins=30, downsampling=10, log=False, figsize=(10,8)):
+    def draw_variable_drift_stack(self, var, roview: int=2, n_x_bins:int=30, bin_size=10, log=False, figsize=(10,8)):
 
-        tps=self.tp_sel
+        # tps=self.tp_sel
         # Split the dataset into bins by depth
-        g = tps.sig_view_2.groupby(pd.cut(tps.sig_view_2.bt_primary_x, n_x_bins), observed=False)
+        df_tps = self.tp_sel.sig_by_view[roview]
+    
+        g = df_tps.groupby(pd.cut(df_tps.bt_primary_x, n_x_bins), observed=False)
 
         fig, ax = plt.subplots(figsize=figsize)
 
         col=f'{var}'
 
-        bins=linspace(tps.p2[col], downsampling)
+        bins=linspace(self.tp_sel.all_by_view[roview][col], bin_size)
 
         l = []
         for k, (i, df) in enumerate(g):
@@ -576,7 +578,7 @@ class TPSignalNoiseAnalyzer:
         ax.set_xlabel(var)
         ax.set_ylabel('counts')
 
-        fig.suptitle(f"{col} distribution by drift depth bins (collection)")
+        fig.suptitle(f"{col} distribution by drift depth bins - view {roview}")
         fig.tight_layout()
         return fig
     

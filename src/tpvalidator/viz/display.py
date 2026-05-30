@@ -64,7 +64,6 @@ class TriggerPrimitivesEventViewer:
         # print(mctruths.query(f'event_uid == {ev_uid}'))
 
         # vmax = tps.adc_integral.max()/5
-        # vmin = tps.adc_integral.min()
 
 
         # equalize the range/

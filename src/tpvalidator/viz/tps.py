@@ -9,7 +9,7 @@ import mplhep as hep
 from typing import Literal, Optional
 from rich.table import Table
 from ..detector_geometry import FDVDGeometry_1x8x14
-from ..analysis.histograms import compute_regaxis_specs
+from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, _build_histogram, _make_intcat_axis
 from matplotlib.colors import LogNorm
 
 
@@ -77,57 +77,60 @@ class TrgPrimitivesPlotter:
         self.block_map = block_map
 
 
-    def _make_int_axis(self, col_name:str, **kwargs):
-        """
-        Helper method to create integer axis form a dataframe column
+    def make_var_reghist(self, var:str, var_binsize: int):
+        """Build and fill a 3-axis histogram over readout plane, backtracker signal flag, and a TP variable.
 
-        TODO: refactor to a helper module
-        """
+        The variable axis is a regularly-spaced ``hist.axis.Regular`` whose range and
+        number of bins are derived automatically from the data via
+        ``compute_regaxis_specs``.
 
-        df = self._df
-        if df[col_name].dtype.kind not in ("i", "u"):
-            raise TypeError(f"Column {col_name} is not of type integer")
+        Args:
+            var: Column name in the TP dataframe to use as the third axis.
+            var_binsize: Bin width for the regular axis (same units as the column).
 
-        values = df[col_name].values
-        lo, hi = np.min(values), np.max(values)
-        return hist.axis.Integer(lo, hi+1, name=col_name, **kwargs)
-
-
-    def _make_intcat_axis(self, col_name:str, **kwargs):
-        """
-        Helper method to create category integer axis form a dataframe
-
-        TODO: refactor to a helper module
+        Returns:
+            hist.Hist: Filled histogram with axes ``[readout_plane_id, bt_is_signal, var]``.
         """
 
-        df = self._df
-        if df[col_name].dtype.kind not in ("i", "u"):
-            raise TypeError(f"Column {col_name} is not of type integer")
+        var_axis = hist.axis.Regular( *compute_regaxis_specs(self._df[var], var_binsize), name=var)
 
-        return hist.axis.IntCategory(sorted(d
-                                            f[col_name].unique()), name=col_name, **kwargs)
-    
-    def _make_regaxis(self, col_name:str, **kwargs):
-        df = self._df
-        if df[col_name].dtype.kind not in ("i", "u", "f"):
-            raise TypeError(f"Column {col_name} is not of type numeric")
-        
-        return hist.axis.Regular( *compute_regaxis_specs(df[col_name], 10), name=col_name)
+        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
+        bt_sig_axis = _make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
 
-
-    def _build_histogram(self, axes):
-
-        h = hist.Hist(*axes)
-
-        kwa = {
-            a.name: self._df[a.name]
-            for a in axes
-        }
-        h.fill(**kwa)
+        h_spec = [rop_axis, bt_sig_axis, var_axis]
+        h = _build_histogram(self._df, h_spec)
 
         return h
+    
 
+    def make_cutsequence_hist(self, var:str, cuts: list[float]):
+        """Build a cumulative histogram over a variable-width cut sequence.
 
+        Creates a 3-axis histogram (readout plane, backtracker signal flag, variable)
+        using explicit bin edges defined by ``cuts``, then computes the right-to-left
+        cumulative sum so each bin gives the count surviving that threshold and above.
+
+        Args:
+            var: Column name in the TP dataframe to use as the cut-sequence axis.
+            cuts: Explicit bin edges for the variable axis (monotonically increasing).
+
+        Returns:
+            hist.Hist: Cumulative histogram with axes ``[readout_plane_id, bt_is_signal, var]``,
+                where each bin contains the count of entries with ``var >= bin_lower_edge``.
+        """
+
+        var_axis = hist.axis.Variable( cuts, name=var)
+
+        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
+        bt_sig_axis = _make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
+
+        h_spec = [rop_axis, bt_sig_axis, var_axis]
+        h = _build_histogram(self._df, h_spec)
+
+        # Calculate the cumulative histogram
+        h_cs = cumsum_hist_nd(h, 'adc_peak', direction='right', flow=True)
+
+        return h_cs
 
 class TrgPrimitivesPlotterV0:
     

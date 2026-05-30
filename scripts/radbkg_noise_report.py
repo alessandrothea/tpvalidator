@@ -88,14 +88,14 @@ def prepare_figures(ws: workspace.TriggerPrimitivesWorkspace, output_dir: Path) 
     pf.add_figure('vs_elnoise_var_dist', tp_ana.draw_tp_signal_noise_dist)
 
     # Draw grid of tp peakADC, TOT and SADC dist in bins of depth
-    pf.add_figure('peakadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'peakADC', downsampling=10, sharex=True, sharey=True, figsize=(12,10)))
-    pf.add_figure('tot_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'TOT', downsampling=1, log=False, sharey=True, figsize=(12,10)))
-    pf.add_figure('sadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'SADC', downsampling=100, sharey=True, figsize=(12,10)))
+    pf.add_figure('peakadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'peakADC', bin_size=10, sharex=True, sharey=True, figsize=(12,10)))
+    pf.add_figure('tot_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'TOT', bin_size=1, log=False, sharey=True, figsize=(12,10)))
+    pf.add_figure('sadc_dist_in_drift_bins', functools.partial(tp_ana.draw_variable_in_drift_grid, 'SADC', bin_size=100, sharey=True, figsize=(12,10)))
 
     # Draw grid of tp peakADC, TOT and SADC dist in bins of depth
-    pf.add_figure('peak_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'peakADC', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
-    pf.add_figure('tot_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'TOT', downsampling=1, n_x_bins=4, log=False, figsize=(5,4)))
-    pf.add_figure('sadc_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'SADC', downsampling=5, n_x_bins=4, log=True, figsize=(5,4)))
+    pf.add_figure('peak_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'peakADC', bin_size=5, n_x_bins=4, log=True, figsize=(5,4)))
+    pf.add_figure('tot_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'TOT', bin_size=1, n_x_bins=4, log=False, figsize=(5,4)))
+    pf.add_figure('sadc_dist_stack_in_drift_bins', functools.partial(tp_ana.draw_variable_drift_stack, 'SADC', bin_size=5, n_x_bins=4, log=True, figsize=(5,4)))
 
     # Draw the impact of cuts on TP distributions
     cuts = [t for t in range(26, 50, 5)]

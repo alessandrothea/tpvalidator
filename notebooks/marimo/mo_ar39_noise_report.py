@@ -1,37 +1,54 @@
 import marimo
 
-__generated_with = "0.23.3"
+__generated_with = "0.23.8"
 app = marimo.App(width="medium")
+
+with app.setup:
+    import marimo as mo
+
+
+    import functools
+    import logging
+    import yaml
+
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    import tpvalidator
+    import tpvalidator.analysis.snn as snn
+    from rich import print
+    import tpvalidator.datacatalogue as dctlg
+    from tpvalidator.viz.backtracker import BackTrackerPlotter
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
-    # Ar39 noise — interactive report
+    # Signal/Noise — interactive report
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
     ## Introduction
-    This notebook aims at characterizing the detector response in simulation using an ar39-only sample.
+    This notebook aims at characterizing the detector response in simulation using background samples.
 
-    by answering the following questions
+    <!-- by answering the following questions
 
     1. Is the rate of trigger primitives from Ar39 compatible with the expectations
 
     - Ar39 is uniformely generaterd inside the detector
-    - Ar39 spectrum has a 1 MeV endpoint,
+    - Ar39 spectrum has a 1 MeV endpoint, -->
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
@@ -42,32 +59,6 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _():
-    import marimo as mo
-
-    return (mo,)
-
-
-@app.cell
-def _(mo):
-    import functools
-    import logging
-    import yaml
-
-    import matplotlib.pyplot as plt
-    from pathlib import Path
-
-    import tpvalidator
-    import tpvalidator.analyzers.snn as snn
-    from rich import print
-    import tpvalidator.datacatalogue as dctlg
-    from tpvalidator.viz.backtracker import BackTrackerPlotter
-
-    mo.md("Imports completed")
-    return BackTrackerPlotter, dctlg, plt, print, snn
-
-
-@app.cell(hide_code=True)
-def _(mo):
     mo.md("""
     ---
 
@@ -77,7 +68,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
+def _():
     dataset_dir = mo.ui.text(
         value="data/vd/1x8x14/3sig",
         label="Dataset directory",
@@ -88,7 +79,7 @@ def _(mo):
 
 
 @app.cell
-def _(dataset_dir, dctlg, mo, print):
+def _(dataset_dir):
 
 
     # _pkg_root = Path(tpvalidator.__file__).parents[2]
@@ -113,7 +104,7 @@ def _(dataset_dir, dctlg, mo, print):
 
 
 @app.cell
-def _(dataset_dir, dataset_name, dctlg, mo):
+def _(dataset_dir, dataset_name):
 
     mo.stop(not dataset_name.value)
 
@@ -124,7 +115,7 @@ def _(dataset_dir, dataset_name, dctlg, mo):
 
 
 @app.cell
-def _(BackTrackerPlotter, mo, snn, ws):
+def _(ws):
     mo.stop(ws is None)
 
     all_tps  = snn.TPSignalNoiseSelector(ws.tps)
@@ -140,24 +131,24 @@ def _(ws):
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
+def _(dataset_name):
+    mo.md(f"""
     ---
 
-    ## Noise and Ar39 signal — ADC distributions
+    ## **Noise and '{dataset_name.value}' ADC distributions**
     """)
     return
 
 
 @app.cell
-def _(mo, snn, ws):
+def _(ws):
     mo.stop(not ws.rawdigits_hists, mo.md("*No waveform file loaded — skipping ADC distribution plot.*"))
     snn.draw_signal_and_noise_adc_distros(ws)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ADC samples distributions per plane (integrated on the full dataset)
 
@@ -171,29 +162,24 @@ def _(mo):
 
 @app.cell
 def _(btp, ws):
-    _ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
-    _some_collection_tps = (
-        ws.tps
-        .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**_ev_uid))
-        .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
-        .iloc[0:6]
-    )
-    btp.plot_tps_vs_ides(tps=_some_collection_tps)
-    return
-
-
-@app.cell
-def _(btp):
-    btp.draw_nel_eff_by_plane()
+    if len(ws.rawdigis_events) != 0:
+        _ev_uid = ws.rawdigits_tree.event_list().iloc[0].to_dict()
+        _some_collection_tps = (
+            ws.tps
+            .query('(event=={event}) & (run=={run}) & (subrun=={subrun})'.format(**_ev_uid))
+            .query('readout_plane_id==2 & samples_over_threshold<4 & bt_is_signal==1')
+            .iloc[0:6]
+        )
+        btp.plot_tps_vs_ides(tps=_some_collection_tps)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
+def _(dataset_name):
+    mo.md(f"""
     ---
 
-    ## Ar39 TPs — point of origin
+    ## **'{dataset_name.value}' TPs — point of origin**
     """)
     return
 
@@ -205,7 +191,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     Point of origin of TPs (`bt_primary_x`) tagged as signal, i.e. matching at least one `SimIDE` object
     """)
@@ -219,9 +205,9 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
-    **Point of origin in the drift for TPs tagged as signal, i.e. matched to at least 1 IDE object.**
+    ### **Point of origin in the drift for TPs tagged as signal, i.e. matched to at least 1 IDE object.**
 
     All 3 distributions have a maximum in the x=(100,200) range, 1 meter from the anode.
     """)
@@ -235,7 +221,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     When weighted by `adc_integral`, the distributions acquire a linear trend. Charge capture by TPs is more efficient close to the anode and less efficient close to the cathode due to diffusion that spread the charge over multiple samples.
     The effect is lower significance of the signal peak in the waveform and loss of TPs.
@@ -252,7 +238,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     The TP multiplicity per track id increases the closer the origin is to the cathode.
     """)
@@ -260,7 +246,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ==TODO==
 
@@ -271,11 +257,12 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ---
-
-    ## Timing of TPs tagged as signal and noise
+    # Signal / Noise TPs
+    Validation of detector simulation and backtracking
+    ## **Time distributions**
     """)
     return
 
@@ -287,7 +274,7 @@ def _(tp_ana):
 
 
 @app.cell
-def _(plt, ws):
+def _(ws):
     _fig, _ax = plt.subplots()
     ws.simides.timestamp.plot.hist(bins=1000, ax=_ax)
     _ax.set_xlabel('time')
@@ -298,7 +285,7 @@ def _(plt, ws):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     - Top: Distribution of TP time by plane
     - Bottom: Distribution of IDEs time of arrival at the anode (CRP)
@@ -310,22 +297,22 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
-    ## Example event: signal and noise TPs
+    ## **TP Distribution in channel and time**
     """)
     return
 
 
 @app.cell
-def _(mo):
+def _():
     entry_number = mo.ui.number(start=0, stop=1000, value=3, label="Entry number")
     entry_number
     return (entry_number,)
 
 
 @app.cell
-def _(all_tps, entry_number, mo, snn):
+def _(all_tps, entry_number):
     _panels = []
     for _thresh in (26, 36, 46, 56):
         _ana = snn.TPSignalNoiseAnalyzer(all_tps.query(f'adc_peak > {_thresh}'))
@@ -340,7 +327,7 @@ def _(all_tps, entry_number, mo, snn):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     - Channel and `sample_peak` of TPs for the selected event
     - Incremental `adc_peak` cuts are applied (from a) to d)) to show the distribution of TPs at higher adc_peak
@@ -351,94 +338,109 @@ def _(mo):
     return
 
 
+@app.cell
+def _(btp):
+    btp.draw_nel_eff_by_plane()
+    return
+
+
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ---
 
-    ## Basic TP distributions
+    ## **Distributions of main TP variables**
     """)
     return
 
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_tp_signal_noise_dist()
+    mo.vstack([
+        mo.md("### **ROP 0 (Induction U)**"),
+        tp_ana.draw_tp_signal_noise_dist(roview=0),
+        mo.md("### **ROP 1 (Induction V)**"),
+        tp_ana.draw_tp_signal_noise_dist(roview=1),
+        mo.md("### **ROP 2 (Collection)**"),
+        tp_ana.draw_tp_signal_noise_dist(roview=2),
+    ])
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ---
 
-    ## TP `adc_peak` distributions across drift depth
+    ## **TP `adc_peak` distributions across drift depth**
     """)
     return
 
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_variable_in_drift_grid('adc_peak', downsampling=10, sharex=True, sharey=True, figsize=(12, 10))
+    tp_ana.draw_variable_in_drift_grid('adc_peak', bin_size=10, sharex=True, sharey=True, figsize=(12, 10))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
-    ## TP `samples_over_threshold` distributions across drift depth
+    ## **TP `samples_over_threshold` distributions across drift depth**
     """)
     return
 
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_variable_in_drift_grid('samples_over_threshold', downsampling=1, log=False, sharey=True, figsize=(12, 10))
+    tp_ana.draw_variable_in_drift_grid('samples_over_threshold', bin_size=1, log=False, sharey=True, figsize=(12, 10))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
-    ## TP `adc_integral` distributions across drift depth
+    ## **TP `adc_integral` distributions across drift depth**
     """)
     return
 
 
 @app.cell
-def _(mo, tp_ana):
+def _(tp_ana):
     mo.md("Bins of bt_x (collection)")
-    tp_ana.draw_variable_in_drift_grid('adc_integral', downsampling=100, sharey=True, figsize=(12, 10))
+    tp_ana.draw_variable_in_drift_grid('adc_integral', bin_size=100, sharey=True, figsize=(12, 10))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ## Stacked TP distributions
     """)
     return
 
 
-@app.cell
-def _(mo, tp_ana):
-    mo.hstack([
-        mo.as_html(tp_ana.draw_variable_drift_stack('adc_peak',
-                                     downsampling=5, n_x_bins=4, log=True, figsize=(5, 4))),
-        mo.as_html(tp_ana.draw_variable_drift_stack('samples_over_threshold',
-                                     downsampling=1, n_x_bins=4, log=False, figsize=(5, 4))),
-        mo.as_html(tp_ana.draw_variable_drift_stack('adc_integral',
-                                     downsampling=5, n_x_bins=4, log=True, figsize=(5, 4))),
+@app.cell(hide_code=True)
+def _(tp_ana):
+    mo.vstack([
+        mo.hstack([
+            mo.as_html(tp_ana.draw_variable_drift_stack('adc_peak', roview=_roview,
+                                         bin_size=5, n_x_bins=4, log=True, figsize=(5, 4))),
+            mo.as_html(tp_ana.draw_variable_drift_stack('samples_over_threshold', roview=_roview,
+                                         bin_size=1, n_x_bins=4, log=False, figsize=(5, 4))),
+            mo.as_html(tp_ana.draw_variable_drift_stack('adc_integral', roview=_roview,
+                                         bin_size=5, n_x_bins=4, log=True, figsize=(5, 4))),
+        ]) for _roview in range(3)
     ])
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     Comparison of `adc_peak`, `samples_over_threshold` and `adc_integral` in 4 regions of `bt_primary_x` for the collection plane.
     """)
@@ -446,7 +448,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ---
 
@@ -462,7 +464,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
@@ -479,7 +481,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
@@ -496,7 +498,7 @@ def _(tp_ana):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md("""
     ## Threshold scan — noise rejection efficiency
     """)
@@ -505,12 +507,12 @@ def _(mo):
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_threshold_scan('adc_peak', list(range(26, 120, 1)))
+    tp_ana.draw_threshold_scan('adc_peak', plane_id=2, thresholds=list(range(26, 120, 1)))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ---
 
@@ -521,13 +523,13 @@ def _(mo):
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_threshold_scan('samples_over_threshold', list(range(0, 10, 2)))
+    tp_ana.draw_threshold_scan('samples_over_threshold', plane_id=2, thresholds=list(range(0, 10, 2)))
     return
 
 
 @app.cell
 def _(tp_ana):
-    tp_ana.draw_threshold_scan('adc_integral', list(range(0, 500, 100)))
+    tp_ana.draw_threshold_scan('adc_integral', plane_id=2, thresholds=list(range(0, 500, 100)))
     return
 
 

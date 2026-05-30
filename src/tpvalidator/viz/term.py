@@ -25,7 +25,10 @@ def dataframe_to_rich_table(
         r = row._asdict()
         for c in pandas_dataframe.columns:
             fmt = formatters.get(c, "{}")
-            t_row.append(fmt.format(r[c]))
+            if callable(fmt):
+                t_row.append(fmt(r[c]))
+            else:
+                t_row.append(fmt.format(r[c]))
         rich_table.add_row(*t_row)
 
     return rich_table

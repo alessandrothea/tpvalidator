@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from ..workspace import TriggerPrimitivesWorkspace
-from typing import Tuple, Optional, Union, Sequence, Dict, List
+from typing import Optional
 from ..utils import subplot_autogrid
 from rich import print
 
@@ -174,21 +174,56 @@ class BackTrackerPlotter:
         return fig
 
 
-    def draw_nel_eff_by_plane(self, bins=None, figsize=(12, 4)):
-        ws=self.ws
+    def compute_nel_eff_by_plane(self, tp_query:Optional[str] = None) -> pd.DataFrame:
+        """Compute the backtracking electron-count efficiency per readout plane.
 
+        For each ROP, divides the number of electrons matched by the backtracker
+        (``bt_numelectrons`` summed over signal TPs) by the total number of electrons
+        deposited in that plane (``tot_numelectrons_ropN`` from the event summary).
+
+        Returns:
+            DataFrame indexed by ``event_uid`` with one ``nel_eff_rop{N}`` column per plane.
+        """
+        ws = self.ws
         n_rops = 3
-        fig, axes = plt.subplots(1,n_rops, figsize=figsize)
+        parts = {}
         for rop_id in range(n_rops):
-            ax = axes[rop_id]
             tot_nel_df = ws.event_summary[['event_uid', f'tot_numelectrons_rop{rop_id}']].set_index('event_uid')
-            bt_nel_df = pd.DataFrame(ws.tps.query(f'bt_is_signal == 1 & readout_plane_id == {rop_id}').groupby('event_uid').bt_numelectrons.sum())
-            eff_df = tot_nel_df.merge(bt_nel_df, how='inner', on='event_uid').fillna(0)
-            eff_df['ratio'] = eff_df.bt_numelectrons/eff_df[f'tot_numelectrons_rop{rop_id}']
-            eff_df.ratio.hist(ax=ax, bins=bins)
 
+            signal_tps = ws.tps.query(f'bt_is_signal == 1 & readout_plane_id == {rop_id}')
+            if tp_query:
+                signal_tps.query(tp_query, inplace=True)
+                
+            bt_nel_df = pd.DataFrame(signal_tps.groupby('event_uid').bt_numelectrons.sum())
+            eff_df = tot_nel_df.merge(bt_nel_df, how='left', on='event_uid')
+            
+            eff_df.fillna(0, inplace=True)
+
+            # Remove events where no charge was collected in the active volume
+            eff_df.query(f'tot_numelectrons_rop{rop_id} > 0', inplace=True)
+
+            parts[f'nel_eff_rop{rop_id}'] = eff_df.bt_numelectrons / eff_df[f'tot_numelectrons_rop{rop_id}']
+
+        eff_by_plane =  pd.DataFrame(parts)
+        return eff_by_plane
+        
+
+    def draw_nel_eff_by_plane(self, tp_query:Optional[str] = None, bins=None, figsize=(12, 4)):
+        """Plot histograms of the backtracking electron-count efficiency for each readout plane.
+
+        Args:
+            bins: Bin specification passed to ``DataFrame.hist`` (default: auto).
+            figsize: Figure size as ``(width, height)`` in inches.
+
+        Returns:
+            The matplotlib ``Figure``.
+        """
+        eff_df = self.compute_nel_eff_by_plane(tp_query=tp_query)
+        n_rops = len(eff_df.columns)
+        fig, axes = plt.subplots(1, n_rops, figsize=figsize, sharex=True)
+        for ax, col in zip(axes, eff_df.columns):
+            eff_df[col].hist(ax=ax, bins=bins)
             ax.set_xlabel(r"$Eff_{N_{el}}$")
-
         fig.suptitle("Backtracking Efficiency by plane")
         fig.tight_layout()
         return fig
