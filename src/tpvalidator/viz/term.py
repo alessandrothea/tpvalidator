@@ -24,11 +24,13 @@ def dataframe_to_rich_table(
         t_row = [str(row[0])] if show_index else []
         r = row._asdict()
         for c in pandas_dataframe.columns:
-            fmt = formatters.get(c, "{}")
+            fmt = formatters.get(c, None)
             if callable(fmt):
                 t_row.append(fmt(r[c]))
-            else:
+            elif fmt is not None:
                 t_row.append(fmt.format(r[c]))
+            else:
+                t_row.append(str(r[c]))
         rich_table.add_row(*t_row)
 
     return rich_table

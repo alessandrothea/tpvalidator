@@ -198,7 +198,6 @@ class BackTrackerPlotter:
             eff_df = tot_nel_df.merge(bt_nel_df, how='left', on='event_uid')
             
             eff_df.fillna(0, inplace=True)
-
             # Remove events where no charge was collected in the active volume
             eff_df.query(f'tot_numelectrons_rop{rop_id} > 0', inplace=True)
 

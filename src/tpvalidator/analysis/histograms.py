@@ -43,6 +43,17 @@ def _make_intcat_axis(df, col_name:str, **kwargs):
 
     return hist.axis.IntCategory(sorted(df[col_name].unique()), name=col_name, **kwargs)
 
+def _make_strcat_axis(df, col_name:str, **kwargs):
+    """
+    Helper method to create category integer axis form a dataframe
+
+    TODO: refactor to a helper module
+    """
+
+    if df[col_name].dtype.kind not in ("s", "O"):
+        raise TypeError(f"Column {col_name} is not of type string: {df[col_name].dtype.kind}")
+
+    return hist.axis.StrCategory(sorted(df[col_name].unique()), name=col_name, **kwargs)
 
 def _make_regaxis(df, col_name:str, bin_size:int, **kwargs):
     if df[col_name].dtype.kind not in ("i", "u", "f"):
@@ -580,7 +591,7 @@ def cumsum_hist_nd(
 
 
 
-def cut_scan_to_df(h, cat_axis_name, cut_axis_name):
+def cut_scan_to_df(h_cs, cat_axis_name:str, cut_axis_name:str, ):
     """Pivot a 2D cut-scan histogram into a wide-format DataFrame.
 
     Each row corresponds to one edge of the cut axis; each category in
@@ -588,7 +599,7 @@ def cut_scan_to_df(h, cat_axis_name, cut_axis_name):
     The cut-axis edges are stored in a column named ``<cut_axis>_min``.
 
     Args:
-        h: boost-histogram / hist.Hist with at least two axes.
+        h_cs: boost-histogram / hist.Hist with at least two axes.
         cat_axis_name: Name of the categorical (StrCategory) axis to pivot on.
         cut_axis_name: Name of the variable/regular axis whose edges define the
             cut values (e.g. a threshold or ADC cut).
@@ -597,12 +608,12 @@ def cut_scan_to_df(h, cat_axis_name, cut_axis_name):
         pd.DataFrame with one row per cut-axis edge and one column per category,
         plus the cut-axis edge column.
     """
-    cat = h.axes[cat_axis_name]
+    cat = h_cs.axes[cat_axis_name]
 
-    cuts = h.axes[cut_axis_name].edges
+    cuts = h_cs.axes[cut_axis_name].edges
 
     data = {f'{cut_axis_name}_min': cuts}
 
     for k in cat:
-        data[f'{cat_axis_name}_{k}'] = h[{cat_axis_name: k}].values(flow=True)
+        data[f'{cat_axis_name}_{k}'] = h_cs[{cat_axis_name: k}].values(flow=True)
     return pd.DataFrame(data)

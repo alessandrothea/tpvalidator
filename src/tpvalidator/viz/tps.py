@@ -2,15 +2,18 @@
 from ..workspace import TriggerPrimitivesWorkspace
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import hist
 import mplhep as hep
 
 from typing import Literal, Optional
 from rich.table import Table
-from ..detector_geometry import FDVDGeometry_1x8x14
-from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, _build_histogram, _make_intcat_axis
 from matplotlib.colors import LogNorm
+
+from ..detector_geometry import FDVDGeometry_1x8x14
+from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, _build_histogram, _make_intcat_axis, _make_strcat_axis
+from ..viz.term import dataframe_to_rich_table
 
 
 
@@ -29,8 +32,9 @@ class TrgPrimitivesPlotter:
         ----------
         ws:
             Workspace instance.
-        collection:
-            ``'mctruths'`` or ``'mcparticles'``.
+        geo:
+            <to add>
+
         """
         self.ws = ws
         
@@ -51,6 +55,9 @@ class TrgPrimitivesPlotter:
             case _:
                 raise ValueError(f'Illegal geo value. Received {geo} expected [1x8x14]')
 
+    @property
+    def geo(self):
+        return self._geo
 
     def simulated_time(self) -> float:
         """Return total simulated time in seconds.
@@ -131,6 +138,63 @@ class TrgPrimitivesPlotter:
         h_cs = cumsum_hist_nd(h, 'adc_peak', direction='right', flow=True)
 
         return h_cs
+
+
+    def make_generator_counts_hist(self, cut: Optional[str] = None) -> hist.Hist:
+        """Return a 1D StrCategory hist of generator counts for the active collection.
+
+        For ``mctruths`` the groups are keyed by ``generator_name``.  For
+        ``mcparticles`` they are keyed by ``truth_block_id`` resolved via
+        ``ws.mctruth_blocks_map``.
+
+        Parameters
+        ----------
+        cut:
+            Optional pandas cut string applied to the DataFrame before
+            filling (e.g. ``'pdg == 11'`` to select electrons only).
+        """
+        df = self._df
+        if cut:
+            df = df.query(cut)
+        # groups = self._make_grops(df, "generator_name")
+        # categories = list(groups.keys())
+        # label_axis = hist.axis.StrCategory(categories, name='generator', label='Generator')
+        label_axis = _make_strcat_axis(self._df, 'bt_generator_name', label='Generator')
+        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
+        h = hist.Hist(label_axis, rop_axis)
+        # for label, sub in groups.items():
+            # for rop, sub_rop in sub.groupby('readout_plane_id'):
+        h.fill(bt_generator_name=df['bt_generator_name'], readout_plane_id=df['readout_plane_id'])
+        return h
+    
+
+    def make_generator_rates_table(self, cut: Optional[str] = None) -> Table:
+        """Return a rich Table of generator names, entry counts, and activity rates in Hz.
+
+        Always derived from ``ws.mctruths`` regardless of the active
+        collection.
+        """
+        simu_time = self.simulated_time()
+
+        h_counts = self.make_generator_counts_hist(cut)
+
+        c_df = pd.DataFrame({
+            'generator': [l if len(l) > 0 else 'WireCellToolkit' for l in h_counts.axes[0]],
+            'counts': h_counts[:,sum].values() / simu_time
+            })
+        
+        fmts = {
+            'counts':'{:.2f}'
+        }
+        return dataframe_to_rich_table(c_df.sort_values('counts', ascending=False),formatters=fmts)
+
+        t = Table('generator name', 'entries', 'rate [Hz]', title='Backgrounds generators by activity')
+        for bin_label, count in zip(h_counts.axes[0], h_counts[:,sum].values()):
+            t.add_row(bin_label, f'{int(count)}', f'{count / simu_time :.2f}')
+
+        return t
+    
+
 
 class TrgPrimitivesPlotterV0:
     
