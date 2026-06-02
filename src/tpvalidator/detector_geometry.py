@@ -102,6 +102,7 @@ _geo_cache: dict = {}
 class FDVDGeometry:
     """VD detector geometry parameterised by TPC grid dimensions."""
 
+    name: str
     tpc_geo: tuple  # (n_cryo, n_apa, n_tpc), e.g. (1, 8, 6)
     geo_resource: str | None = field(default=None, compare=False, hash=False)
 
@@ -209,5 +210,5 @@ class FDVDGeometry:
 
 
 # Module-level singletons — use these instead of instantiating FDVDGeometry directly
-FDVDGeometry_1x8x6  = FDVDGeometry(tpc_geo=(1, 8,  6), geo_resource="dunevd10kt_1x8x6_3view_30deg_geo.json")
-FDVDGeometry_1x8x14 = FDVDGeometry(tpc_geo=(1, 8, 14), geo_resource="dunevd10kt_1x8x14_3view_30deg_geo.json")
+FDVDGeometry_1x8x6  = FDVDGeometry(name='1x8x6', tpc_geo=(1, 8,  6), geo_resource="dunevd10kt_1x8x6_3view_30deg_geo.json")
+FDVDGeometry_1x8x14 = FDVDGeometry(name='1x8x14', tpc_geo=(1, 8, 14), geo_resource="dunevd10kt_1x8x14_3view_30deg_geo.json")

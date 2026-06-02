@@ -19,7 +19,7 @@ from ..viz.term import dataframe_to_rich_table
 
 class TrgPrimitivesPlotter:
     
-    _electronics_noise_label : str = 'DetectorElectronics'
+    _electronics_noise_label : str = 'DetSimElecNoise'
 
     def __init__(
         self,
@@ -83,8 +83,47 @@ class TrgPrimitivesPlotter:
         block_map[-99999] = self._electronics_noise_label
         self.block_map = block_map
 
+    def _get_cat_axis_list(self, df:pd.DataFrame, categories: list[str]) -> list[hist.axis.AxisProtocol]:
+       
+        h_spec = []
+        for cat in categories:
+            match cat:
+                case 'readout_plane_id':
+                    rop_axis = _make_intcat_axis(df, 'readout_plane_id', label='Readout Plane')
+                    h_spec.append(rop_axis)
 
-    def make_var_reghist(self, var:str, var_binsize: int):
+                case 'bt_is_signal':
+                    bt_sig_axis = _make_intcat_axis(df, 'bt_is_signal', label='Noise/Signal')
+                    h_spec.append(bt_sig_axis)
+
+                case 'bt_generator_name':
+                    bt_gen_axis = _make_strcat_axis(df, 'bt_generator_name', label='Generator')
+                    h_spec.append(bt_gen_axis)
+
+                case _:
+                    raise ValueError(f"Category {cat} not known")
+                
+        return h_spec
+
+
+    def make_hist(self, query: Optional[str]=None, var_spec:Optional[dict]=None, categories: list[str]=['readout_plane_id']):
+
+        df = self._df.query(query) if query else self._df
+
+        h_spec = self._get_cat_axis_list(df, categories)
+
+           
+        if var_spec is not None:
+            var_axis = hist.axis.Regular( *compute_regaxis_specs(df[var_spec['name']], var_spec['bin_size']), name=var_spec['name'], label=var_spec['label'])
+            h_spec.append(var_axis)
+
+        h = _build_histogram(df, h_spec)
+        return h
+        
+    
+
+    def make_var_hist(self, var:str, var_binsize: int, query: Optional[str]=None):
+
         """Build and fill a 3-axis histogram over readout plane, backtracker signal flag, and a TP variable.
 
         The variable axis is a regularly-spaced ``hist.axis.Regular`` whose range and
@@ -99,15 +138,9 @@ class TrgPrimitivesPlotter:
             hist.Hist: Filled histogram with axes ``[readout_plane_id, bt_is_signal, var]``.
         """
 
-        var_axis = hist.axis.Regular( *compute_regaxis_specs(self._df[var], var_binsize), name=var)
-
-        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
-        bt_sig_axis = _make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
-
-        h_spec = [rop_axis, bt_sig_axis, var_axis]
-        h = _build_histogram(self._df, h_spec)
-
-        return h
+        var_spec={'name':var, 'bin_size':var_binsize, 'label':var}
+        return self.make_hist(query, var_spec=var_spec, categories=['readout_plane_id', 'bt_is_signal'])
+    
     
 
     def make_cutsequence_hist(self, var:str, cuts: list[float]):
@@ -126,7 +159,7 @@ class TrgPrimitivesPlotter:
                 where each bin contains the count of entries with ``var >= bin_lower_edge``.
         """
 
-        var_axis = hist.axis.Variable( cuts, name=var)
+        var_axis = hist.axis.Variable(cuts, name=var)
 
         rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
         bt_sig_axis = _make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
@@ -140,7 +173,7 @@ class TrgPrimitivesPlotter:
         return h_cs
 
 
-    def make_generator_counts_hist(self, cut: Optional[str] = None) -> hist.Hist:
+    def make_generator_counts_hist(self, query: Optional[str] = None) -> hist.Hist:
         """Return a 1D StrCategory hist of generator counts for the active collection.
 
         For ``mctruths`` the groups are keyed by ``generator_name``.  For
@@ -153,48 +186,128 @@ class TrgPrimitivesPlotter:
             Optional pandas cut string applied to the DataFrame before
             filling (e.g. ``'pdg == 11'`` to select electrons only).
         """
-        df = self._df
-        if cut:
-            df = df.query(cut)
-        # groups = self._make_grops(df, "generator_name")
-        # categories = list(groups.keys())
-        # label_axis = hist.axis.StrCategory(categories, name='generator', label='Generator')
-        label_axis = _make_strcat_axis(self._df, 'bt_generator_name', label='Generator')
-        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
-        h = hist.Hist(label_axis, rop_axis)
-        # for label, sub in groups.items():
-            # for rop, sub_rop in sub.groupby('readout_plane_id'):
-        h.fill(bt_generator_name=df['bt_generator_name'], readout_plane_id=df['readout_plane_id'])
-        return h
+
+        return self.make_hist(query=query, categories=['bt_generator_name', 'readout_plane_id'])
     
 
-    def make_generator_rates_table(self, cut: Optional[str] = None) -> Table:
-        """Return a rich Table of generator names, entry counts, and activity rates in Hz.
+    def make_generator_activity_table(self,
+                                    query: Optional[str] = None,
+                                    norm: Literal['counts', 'rate'] = 'rate',
+                                    det_geo: Literal['default', 'crp', 'tpc'] = 'default'
+                                    ) -> Table:
+        """Return a rich Table of generator activity, ranked by count or rate.
 
-        Always derived from ``ws.mctruths`` regardless of the active
-        collection.
+        Parameters
+        ----------
+        query:
+            Optional pandas query string applied before histogramming.
+        norm:
+            ``'counts'`` to show raw hit counts; ``'rate'`` to normalise by
+            simulated time and express in Hz (default).
+        det_geo:
+            Geometric normalisation applied on top of ``norm``: ``'default'``
+            uses the full simulation volume (no extra factor), ``'crp'``
+            divides by the number of CRPs, ``'tpc'`` divides by the number of
+            TPCs.
+
+        Returns
+        -------
+        rich.table.Table
+            Rows are sorted by the normalised value in descending order.
+            Unlabelled entries (electronics noise) are shown as
+            ``'ElecNoise'``.
         """
         simu_time = self.simulated_time()
 
-        h_counts = self.make_generator_counts_hist(cut)
+        h_counts = self.make_generator_counts_hist(query)
+
+
+        match norm:
+            case 'counts':
+                norm_unit = 1.
+                col_name = 'counts'
+                fmts = {
+                    col_name:'{:.2f}'
+                }
+            case 'rate':
+                norm_unit = 1./ simu_time
+                col_name = 'rate'
+                fmts = {
+                    col_name:'{:.2f} HZ'
+                }
+            case _:
+                raise ValueError(f'Invalid normalisation {norm}')
+        
+        match det_geo:
+            case 'default':
+                # use the simulation geometry
+                norm_geo = 1.
+            case 'crp':
+                norm_geo = 1./self.geo.num_crps                
+            case 'tpc':
+                norm_geo = 1./self.geo.num_tpcs
+            case _:
+                raise ValueError(f"Invalid 'detgeo' parameter {det_geo}")
+
+        h_counts *= norm_unit*norm_geo
+        det_name = self.geo.name if det_geo=='default' else det_geo
 
         c_df = pd.DataFrame({
-            'generator': [l if len(l) > 0 else 'WireCellToolkit' for l in h_counts.axes[0]],
-            'counts': h_counts[:,sum].values() / simu_time
+            'generator': [l if len(l) > 0 else self._electronics_noise_label for l in h_counts.axes[0]],
+            col_name: h_counts[:,sum].values()
             })
         
-        fmts = {
-            'counts':'{:.2f}'
-        }
-        return dataframe_to_rich_table(c_df.sort_values('counts', ascending=False),formatters=fmts)
 
-        t = Table('generator name', 'entries', 'rate [Hz]', title='Backgrounds generators by activity')
-        for bin_label, count in zip(h_counts.axes[0], h_counts[:,sum].values()):
-            t.add_row(bin_label, f'{int(count)}', f'{count / simu_time :.2f}')
+        return dataframe_to_rich_table(c_df.sort_values(col_name, ascending=False),show_index=True, formatters=fmts, title=f'Rates per generator ({det_name})')
 
-        return t
+
+    def plot_var_by_generator(self,
+                            var_spec:dict,
+                            rop: int,
+                            n_top: int=10,
+                            query: Optional[str] = None,
+                            **kwargs
+        ):
+        """Plot a TP variable distribution broken down by backtracked generator.
+
+        Parameters
+        ----------
+        var_spec:
+            Variable specification dict passed to :meth:`make_hist` (keys: ``var``,
+            ``bins``, ``range``, and optionally ``label``).
+        rop:
+            Readout-plane index to select (sliced from the 2-D histogram).
+        n_top:
+            Number of top generators to show, ranked by total counts (default 10).
+        query:
+            Optional pandas query string applied before histogramming.
+        **kwargs:
+            Extra keyword arguments forwarded to ``plt.subplots``.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+        """
+        h_var = self.make_hist(query=query, var_spec=var_spec, categories=['bt_generator_name', 'readout_plane_id'])
+        h2_var = h_var[{'readout_plane_id':rop}]
+        s = h2_var.stack("bt_generator_name")
+
+        h_top = sorted([h for h in s], key=lambda x: x.sum(), reverse=True)[:n_top]
+
+        fig, ax = plt.subplots(figsize=(10,6), **kwargs)
+        for h in h_top:
+            hep.histplot(h, ax=ax, label=h.name if h.name else self._electronics_noise_label, yerr=False)
+
+        # s.plot(ax=ax)
+        ax.legend()
+        ax.set_yscale('log')
+
+        fig.tight_layout()
+        return fig
     
 
+
+#--------------------------------------------------------------
 
 class TrgPrimitivesPlotterV0:
     

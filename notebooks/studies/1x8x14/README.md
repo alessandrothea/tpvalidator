@@ -1,6 +1,6 @@
 # Notebooks
 
-## `VD-1x8x14-RadiologicalBackgroundMontecarlo`
+## `VD-1x8x14-RadBkgMontecarlo`
 
 Purpose: Perform a basic characterization of radiological background objects:
 - List of generators
@@ -13,7 +13,7 @@ Purpose: Perform a basic characterization of radiological background objects:
 Obsolete (to be moved out)
 - TP origin by generator
 
-## `VD-1x8x14-RadiologicalBackgroundTriggerPrimitiveRates`
+## `VD-1x8x14-RadBkgTriggerPrimitiveRates`
 
 Radiological background rates calculation and definition of baseline TP threshold (Simple Threshold algorithm)
 
@@ -25,7 +25,10 @@ Extract the per-plane TP thresholds corresponding to O(100) kHz TP rates per CRP
 3. Estimate signal/noise ratio for reference threshold  (Slightly above 100 kHz)
 
 
-## `VD-1x8x14-NoiseRateEstimation`
+# Obsolete / not maintained
+
+
+## Outdated : `VD-1x8x14-NoiseRateEstimation`
 
 Short studies on the predicted rates based on the raw ADC distributions.
 The notebook shows how the SimChannel association to waveforms is not fully reliable in the radiological backgrounds sample
