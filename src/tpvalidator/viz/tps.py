@@ -13,7 +13,7 @@ from matplotlib.colors import LogNorm
 
 from ..detector_geometry import FDVDGeometry_1x8x14
 from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, _build_histogram, _make_intcat_axis, _make_strcat_axis
-from ..viz.term import dataframe_to_rich_table
+from .textual import dataframe_to_rich_table
 
 
 
