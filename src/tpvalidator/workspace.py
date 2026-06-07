@@ -87,6 +87,16 @@ class TriggerPrimitivesWorkspace:
 
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
 
+    tree_names = [
+        'event_summary',
+        'mctruths',
+        'mcneutrinos',
+        'mcparticles',
+        'simides',
+        'simides_summary',
+        'tps',
+    ]
+
     # TODO: add arguments to disable truth info loading
     def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
 
@@ -98,14 +108,6 @@ class TriggerPrimitivesWorkspace:
         self._tps_folder  = tps_folder
         self._info_name = 'info'
 
-        # Standard trees
-        self._event_summary_tree_name = f'event_summary'
-        self._mctruths_tree_name = f'mctruths'
-        self._mcneutrinos_tree_name = f'mcneutrinos'
-        self._mcparticles_tree_name = f'mcparticles'
-        self._simides_tree_name = f'simides'
-        self._simides_summary_tree_name = f'simides_summary'
-
         self._rawdigits_tree_name: str = 'rawdigis_tree'
 
         self._data_path = data_path
@@ -115,14 +117,12 @@ class TriggerPrimitivesWorkspace:
         # Don't forget to copy!
         self._extra_info = extra_info.copy()
 
-        # Dataframes
-        self._event_summary = None
-        self._mctruths = None
-        self._mcneutrinos = None
-        self._mcparticles = None
-        self._simides = None
-        self._simides_summary = None
-        self._tps = None
+        # Trees, dataframes, and per-dataframe post-load decorators
+        self._trees = {}
+        self._dataframes = {}
+        self._df_decorators = {
+            'tps': self._decorate_tps_dataframe,
+        }
 
         # RawADCs registry
         self.rawdigis_events = []
@@ -159,24 +159,23 @@ class TriggerPrimitivesWorkspace:
         self._log.info("Adding processing info")
         self.info = self._tuple_rdr.get_info(self._info_name)
 
-        tree_names = [
+        standard_trees = [
             'event_summary',
             'mctruths',
             'mcneutrinos',
             'mcparticles',
-            'simides'
+            'simides',
+            'simides_summary',
         ]
 
-        for t in tree_names:
+        for t in standard_trees:
             self._log.info(f"Adding '{t}' data")
-            ttree_name = getattr(self, f'_{t}_tree_name')
-
             try:
-                ttree = self._tuple_rdr.get_tree(ttree_name)
+                ttree = self._tuple_rdr.get_tree(t)
             except uproot.KeyInFileError:
-                self._log.warning(f"Key '{ttree_name}' not found in file.")
+                self._log.warning(f"Key '{t}' not found in file.")
                 ttree = None
-            setattr(self, f'{t}_tree', ttree)
+            self._trees[t] = ttree
 
         # Add trigger primitives
         if self._tps_folder in f[f'{self._analyzer_name}']:
@@ -184,17 +183,17 @@ class TriggerPrimitivesWorkspace:
             tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
             if tps_key:
                 logging.info(f'Loading {tps_key}')
-                self.tps_tree = tp_trees_folder[tps_key]
+                self._trees['tps'] = tp_trees_folder[tps_key]
                 self._tps_tree_name = tps_key
             else:
                 match len(tp_trees_folder.keys(cycle=False)):
                     case 0:
-                        self.tps_tree = None
+                        self._trees['tps'] = None
                     case 1:
                         self._tps_tree_name = f'{tp_trees_folder.keys(cycle=False)[0]}'
                         self._tps_tree_path = f'{self._tps_folder}/{self._tps_tree_name}'
                         logging.info(f'Loading {self._tps_tree_path}')
-                        self.tps_tree = self._tuple_rdr.get_tree(f"{self._tps_tree_path}")
+                        self._trees['tps'] = self._tuple_rdr.get_tree(f"{self._tps_tree_path}")
                     case _:
                         raise RuntimeError(f"Found multiple TP keys while expecting one {tp_trees_folder.keys()}")
 
@@ -202,6 +201,20 @@ class TriggerPrimitivesWorkspace:
         else:
             self._log.info(f"No {self._tps_folder} folder found")
 
+
+
+    def __getattr__(self, name):
+        if '_dataframes' in self.__dict__ and name in self.tree_names:
+            return self._get_dataframe(name)
+        raise AttributeError(name)
+
+
+    def _get_dataframe(self, name) -> TrgDataFrame:
+        if name not in self._dataframes:
+            self._dataframes[name] = self._load_dataframe_with_event_cut(name)
+            if name in self._df_decorators:
+                self._df_decorators[name]()
+        return self._dataframes[name]
 
 
     @staticmethod
@@ -213,7 +226,7 @@ class TriggerPrimitivesWorkspace:
 
     def _load_dataframe_with_event_cut(self, df_id: str) -> pd.DataFrame:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
-        tree = getattr(self, f'{df_id}_tree')
+        tree = self._trees[df_id]
         df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
         if 'event_uid' not in df.columns:
             df['event_uid'] = df.run.astype("uint64")*1000000+df.subrun.astype("uint64")*100+df.event.astype("uint64")
@@ -227,10 +240,11 @@ class TriggerPrimitivesWorkspace:
         """Decorate TPS dataframe with extra columns useful for analysis:
         time_peak, sample_start, sample_peak, bt_is_signal.
         """
-        self.tps['time_peak'] = self.tps.time_start+self.tps.samples_to_peak*32
-        self.tps['sample_start'] = self.tps.time_start//32
-        self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_to_peak
-        self.tps['bt_is_signal'] = (self.tps.bt_numelectrons > 0).astype(np.int8)
+        df = self._dataframes['tps']
+        df['time_peak']    = df.time_start + df.samples_to_peak * 32
+        df['sample_start'] = df.time_start // 32
+        df['sample_peak']  = df.sample_start + df.samples_to_peak
+        df['bt_is_signal'] = (df.bt_numelectrons > 0).astype(np.int8)
 
 
     @property
@@ -240,63 +254,6 @@ class TriggerPrimitivesWorkspace:
     @property
     def tp_maker_name(self):
         return self._tps_tree_name.replace('_', ':')
-
-
-    # tree getters
-    @property
-    def event_summary(self):
-        if self._event_summary is None:
-            self._log.info("Loading event summary dataset")
-            self._event_summary = self._load_dataframe_with_event_cut('event_summary')
-        return self._event_summary
-
-
-    @property
-    def mctruths(self):
-        if self._mctruths is None:
-            self._log.debug("Loading MCTruth dataset")
-            self._mctruths = self._load_dataframe_with_event_cut('mctruths')
-        return self._mctruths
-
-
-    @property
-    def mcneutrinos(self):
-        if self._mcneutrinos is None:
-            self._log.debug("Loading MCNeutrino dataset")
-            self._mcneutrinos = self._load_dataframe_with_event_cut('mcneutrinos')
-        return self._mcneutrinos
-
-
-    @property
-    def mcparticles(self):
-        if self._mcparticles is None:
-            self._log.debug("Loading MCParticles dataset")
-            self._mcparticles = self._load_dataframe_with_event_cut('mcparticles')
-        return self._mcparticles
-
-
-    @property
-    def simides(self):
-        if self._simides is None:
-            self._log.debug("Loading IDEs dataset")
-            self._simides = self._load_dataframe_with_event_cut('simides')
-        return self._simides
-
-
-    @property
-    def simides(self):
-        if self._simides_summary is None:
-            self._log.debug("Loading IDEs dataset")
-            self._simides_summary = self._load_dataframe_with_event_cut('simides')
-        return self._simides_summary
-
-    @property
-    def tps(self):
-        if self._tps is None:
-            self._log.debug("Loading tps dataset")
-            self._tps = self._load_dataframe_with_event_cut('tps')
-            self._decorate_tps_dataframe()
-        return self._tps
 
 
     @property
@@ -328,7 +285,7 @@ class TriggerPrimitivesWorkspace:
         ``first_entry`` / ``last_entry`` slice configured at construction time.
         """
         if self._event_list is None:
-            self._event_list = self.event_summary_tree.to_df(branches=['event', 'run', 'subrun'], entry_start=self._first_entry, entry_stop=self._last_entry)
+            self._event_list = self._trees['event_summary'].to_df(branches=['event', 'run', 'subrun'], entry_start=self._first_entry, entry_stop=self._last_entry)
         return self._event_list
 
 
@@ -341,7 +298,7 @@ class TriggerPrimitivesWorkspace:
         self._raw_tuple_rdr = RawWaveformsNtupleReader(data_path)
 
         self._log.info("Loading rawADC tree")
-        self.rawdigits_tree = self._raw_tuple_rdr.get_tree(self._rawdigits_tree_name)
+        self._trees['rawdigits'] = self._raw_tuple_rdr.get_tree(self._rawdigits_tree_name)
 
         self.rawdigits_hists = {}
         for k in self._raw_tuple_rdr.keys(cycle=False):
@@ -353,7 +310,7 @@ class TriggerPrimitivesWorkspace:
 
         # TODO: 
         self._log.info("Load rawdigis event list")
-        self.rawdigis_events = self.rawdigits_tree.event_list()
+        self.rawdigis_events = self._trees['rawdigits'].event_list()
         self._log.info(f"{len(self.rawdigis_events)} events found")
 
 
@@ -368,7 +325,7 @@ class TriggerPrimitivesWorkspace:
             if rawadc is not None and channel_mask == rawadc.prod_info['channel_mask']:
                 return self._rawadcs[ev_uid]
 
-            rwdf = TrgDataFrame(self.rawdigits_tree.to_df(*ev_uid, channel_mask=channel_mask))
+            rwdf = TrgDataFrame(self._trees['rawdigits'].to_df(*ev_uid, channel_mask=channel_mask))
             rwdf.prod_info = {
                 'channel_mask': channel_mask
             }
