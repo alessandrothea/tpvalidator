@@ -12,7 +12,7 @@ from rich.table import Table
 from matplotlib.colors import LogNorm
 
 from ..detector_geometry import FDVDGeometry_1x8x14
-from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, _build_histogram, _make_intcat_axis, _make_strcat_axis
+from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, build_histogram, make_intcat_axis, make_strcat_axis
 from .textual import dataframe_to_rich_table
 
 
@@ -20,6 +20,11 @@ from .textual import dataframe_to_rich_table
 class TrgPrimitivesPlotter:
     
     _electronics_noise_label : str = 'DetSimElecNoise'
+    _default_var_specs = [
+        {'name':'adc_peak', 'bin_size':10},
+        {'name':'samples_over_threshold', 'bin_size': 2},
+        {'name':'adc_integral', 'bin_size': 10}
+    ]
 
     def __init__(
         self,
@@ -89,38 +94,79 @@ class TrgPrimitivesPlotter:
         for cat in categories:
             match cat:
                 case 'readout_plane_id':
-                    rop_axis = _make_intcat_axis(df, 'readout_plane_id', label='Readout Plane')
+                    rop_axis = make_intcat_axis(df, 'readout_plane_id', label='Readout Plane')
                     h_spec.append(rop_axis)
 
                 case 'bt_is_signal':
-                    bt_sig_axis = _make_intcat_axis(df, 'bt_is_signal', label='Noise/Signal')
+                    bt_sig_axis = make_intcat_axis(df, 'bt_is_signal', label='Noise/Signal')
                     h_spec.append(bt_sig_axis)
 
                 case 'bt_generator_name':
-                    bt_gen_axis = _make_strcat_axis(df, 'bt_generator_name', label='Generator')
+                    bt_gen_axis = make_strcat_axis(df, 'bt_generator_name', label='Generator')
                     h_spec.append(bt_gen_axis)
 
                 case _:
                     raise ValueError(f"Category {cat} not known")
                 
         return h_spec
+    
+    def _get_cat_axis_list(self, df:pd.DataFrame, categories: list[str]) -> list[hist.axis.AxisProtocol]:
 
+        # Static map of known category axis maker
+        cat_makers_map = {
+            'readout_plane_id': lambda df: make_intcat_axis(df, 'readout_plane_id', label='Readout Plane'),
+            'bt_is_signal': lambda df: make_intcat_axis(df, 'bt_is_signal', label='Noise/Signal'),
+            'bt_generator_name': lambda df: make_strcat_axis(df, 'bt_generator_name', label='Generator')
+        }
+        h_spec = []
+        for cat in categories:
+            maker = cat_makers_map.get(cat, None)
 
-    def make_hist(self, query: Optional[str]=None, var_spec:Optional[dict]=None, categories: list[str]=['readout_plane_id']):
+            if maker is None:
+                raise ValueError(f"Category {cat} not known")
+            h_spec.append(maker(df))
 
-        df = self._df.query(query) if query else self._df
+                
+        return h_spec
+    
+    
+
+    def make_hist(self, query: Optional[str]=None, var_spec:list[dict]|dict=[], categories: list[str]=['readout_plane_id'], weight: Optional[str]=None, event_filter: Optional[dict]=None):
+
+        df = self._df
+
+        # TODO: generalize
+        if event_filter:
+            ev_name = event_filter['collection']
+            ev_filter = event_filter['filter']
+
+            coll = getattr(self.ws, ev_name)
+            index_list = coll.query(ev_filter).index
+
+            # Extract the top level
+            top_level = {idx[0] for idx in index_list}
+
+            df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
+
+        if query:
+            df = df.query(query)
 
         h_spec = self._get_cat_axis_list(df, categories)
 
-           
-        if var_spec is not None:
-            var_axis = hist.axis.Regular( *compute_regaxis_specs(df[var_spec['name']], var_spec['bin_size']), name=var_spec['name'], label=var_spec['label'])
+        if isinstance(var_spec, dict):
+            var_spec = [var_spec]
+
+        for s in var_spec:
+            v_name = s['name']
+            v_bin_size = s['bin_size']
+            v_label = s.get('label', v_name)
+            var_axis = hist.axis.Regular( *compute_regaxis_specs(df[v_name], v_bin_size), name=v_name, label=v_label)
             h_spec.append(var_axis)
 
-        h = _build_histogram(df, h_spec)
+        h = build_histogram(df, h_spec, weight=weight)
         return h
         
-    
+
 
     def make_var_hist(self, var:str, var_binsize: int, query: Optional[str]=None):
 
@@ -143,7 +189,7 @@ class TrgPrimitivesPlotter:
     
     
 
-    def make_cutsequence_hist(self, var:str, cuts: list[float]):
+    def make_cutsequence_hist(self, var:str, cuts: list[float], weight:str=None):
         """Build a cumulative histogram over a variable-width cut sequence.
 
         Creates a 3-axis histogram (readout plane, backtracker signal flag, variable)
@@ -161,14 +207,14 @@ class TrgPrimitivesPlotter:
 
         var_axis = hist.axis.Variable(cuts, name=var)
 
-        rop_axis = _make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
-        bt_sig_axis = _make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
+        rop_axis = make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
+        bt_sig_axis = make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
 
         h_spec = [rop_axis, bt_sig_axis, var_axis]
-        h = _build_histogram(self._df, h_spec)
+        h = build_histogram(self._df, h_spec, weight=weight)
 
         # Calculate the cumulative histogram
-        h_cs = cumsum_hist_nd(h, 'adc_peak', direction='right', flow=True)
+        h_cs = cumsum_hist_nd(h, var, direction='right', flow=True)
 
         return h_cs
 
@@ -266,7 +312,7 @@ class TrgPrimitivesPlotter:
                             rop: int,
                             n_top: int=10,
                             query: Optional[str] = None,
-                            **kwargs
+                            **fig_kwargs
         ):
         """Plot a TP variable distribution broken down by backtracked generator.
 
@@ -294,7 +340,10 @@ class TrgPrimitivesPlotter:
 
         h_top = sorted([h for h in s], key=lambda x: x.sum(), reverse=True)[:n_top]
 
-        fig, ax = plt.subplots(figsize=(10,6), **kwargs)
+        if 'figsize' not in fig_kwargs:
+            fig_kwargs['fig_size'] = (8,5)
+
+        fig, ax = plt.subplots(**fig_kwargs)
         for h in h_top:
             hep.histplot(h, ax=ax, label=h.name if h.name else self._electronics_noise_label, yerr=False)
 
@@ -396,8 +445,7 @@ class TrgPrimitivesPlotterV0:
         if n_top is not None:
             groups = dict(list(groups.items())[:n_top])
         return groups
-
-    
+  
     
 
     def make_generator_counts_hist(self, cut: Optional[str] = None) -> hist.Hist:
@@ -447,7 +495,7 @@ class TrgPrimitivesPlotterV0:
     def plot_generator_activity(self, 
                                 norm: Literal['counts', 'rate'] = 'counts',
                                 cut: Optional[str]=None,
-                                figsize: tuple = (10, 10)
+                                figsize: tuple = (8, 6)
                                 ):
         """Plot generator activity as a filled bar histogram.
 

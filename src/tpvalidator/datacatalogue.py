@@ -16,6 +16,7 @@ _log = logging.getLogger(__name__)
 class DatasetEntry(BaseModel):
     trg_file: str
     rawadc_file: Optional[str] = None
+    label: Optional[str] = None
 
 
 class DataCatalogue(BaseModel):
@@ -64,7 +65,7 @@ def list_datasets(dataset_dir: str) -> List[str]:
     return list(parse(dataset_dir).datasets_spec.keys())
 
 
-def load_datasets(dataset_dir: str, selection: Optional[List[str]] = None) -> dict:
+def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[List[str]] = None) -> dict:
     """Load workspace objects for each dataset (optionally filtered by *selection*)."""
     d = _resolve_dir(dataset_dir)
     cfg = parse(dataset_dir)
@@ -77,7 +78,7 @@ def load_datasets(dataset_dir: str, selection: Optional[List[str]] = None) -> di
 
         print(f"Loading {name}")
         ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file, extra_info=cfg.dataset_info)
-        if entry.rawadc_file:
+        if entry.rawadc_file and load_rawadc:
             print(f"Adding {entry.rawadc_file}")
             ws.add_rawdigits(str(dataset_path / entry.rawadc_file))
         print(f"Dataset '{name}': {ws.num_entries} events")
@@ -95,6 +96,6 @@ def load_datasets(dataset_dir: str, selection: Optional[List[str]] = None) -> di
     return datasets
 
 
-def load(dataset_dir: str, selection: Optional[List[str]] = None) -> dict:
+def load(dataset_dir: str, load_rawadc:bool=True, selection: Optional[List[str]] = None) -> dict:
     """Load all datasets from a catalogue directory (convenience wrapper)."""
-    return load_datasets(dataset_dir, selection)
+    return load_datasets(dataset_dir, load_rawadc, selection)

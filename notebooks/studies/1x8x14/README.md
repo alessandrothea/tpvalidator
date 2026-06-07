@@ -17,7 +17,7 @@ Obsolete (to be moved out)
 
 Definition of baseline TP threshold (Simple Threshold algorithm) using radiological background rates calculation
 
-**Purpose**: starting from a low-threshold TPs radiological background sample, calculate the expected TP rages from radiological backgrounds as a function of `adc_peak` threshold.
+**Purpose**: Calculate the expected TP rages from radiological backgrounds as a function of `adc_peak` threshold, starting from a low-threshold TPs radiological background sample.
 Extract the per-plane TP thresholds corresponding to O(100) kHz TP rates per CRP plane, separating the contributions from physical backgrounds and electronic noise.
 
 1. Calculate trigger rates per plane as a function of `adc_peak` thresholds
@@ -35,8 +35,15 @@ Calibration of TP integrated charge using single electron and gamma samples.
 
 ## `VD-1x8x14-TPFiltering`
 
-TriggerPrimitive filtering is applied before the TriggerActvity making stage to remove TPs asso
+TriggerPrimitive filtering is applied before the TriggerActvity making stage to remove TPs associated to very low energy deposits such as Ar39.
+This is accomplished by applying tighter `adc_peak` cuts and an additional `samples_over_threshold`.
 
+**Purpose**: Assess the impact of TP filtering cuts on signals and radiological samples
+
+- Display the `adc_peak`/`samples_over_threshold` distributions
+  - `adc_integral` weighting is used together with TP counts to highlight where the 
+- Show the impact of incremental of the additional `samples_over_threshold` cut on distributions, for signals (e- and gamma primarily) and backgronds
+- Show the impact on rates per background type and confirm it meets the expectations 
 
 
 # Obsolete / not maintained

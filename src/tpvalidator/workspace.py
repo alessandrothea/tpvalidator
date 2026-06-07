@@ -88,8 +88,9 @@ class TriggerPrimitivesWorkspace:
     _log = logging.getLogger('TriggerPrimitivesWorkspace')
 
     # TODO: add arguments to disable truth info loading
-    def __init__(self, data_path: str, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
+    def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
 
+        self._name = name if name is not None else data_path
         self._tuple_rdr = None
 
         # Labels and ROOT object paths
@@ -210,7 +211,6 @@ class TriggerPrimitivesWorkspace:
         return tree.to_df(branches=['event', 'run', 'subrun']).event.unique()
 
 
-
     def _load_dataframe_with_event_cut(self, df_id: str) -> pd.DataFrame:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
         tree = getattr(self, f'{df_id}_tree')
@@ -232,6 +232,10 @@ class TriggerPrimitivesWorkspace:
         self.tps['sample_peak'] = self.tps.sample_start+self.tps.samples_to_peak
         self.tps['bt_is_signal'] = (self.tps.bt_numelectrons > 0).astype(np.int8)
 
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def tp_maker_name(self):

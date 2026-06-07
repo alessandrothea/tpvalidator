@@ -16,7 +16,7 @@ type Quantiles = float | Sequence[float]
 #--------------------------------------------------------------------------
 # Genearl purpose methods
 #
-def _make_int_axis(df, col_name:str, **kwargs):
+def make_int_axis(df, col_name:str, **kwargs):
     """
     Helper method to create integer axis form a dataframe column
 
@@ -31,7 +31,7 @@ def _make_int_axis(df, col_name:str, **kwargs):
     return hist.axis.Integer(lo, hi+1, name=col_name, **kwargs)
 
 
-def _make_intcat_axis(df, col_name:str, **kwargs):
+def make_intcat_axis(df, col_name:str, **kwargs):
     """
     Helper method to create category integer axis form a dataframe
 
@@ -43,11 +43,9 @@ def _make_intcat_axis(df, col_name:str, **kwargs):
 
     return hist.axis.IntCategory(sorted(df[col_name].unique()), name=col_name, **kwargs)
 
-def _make_strcat_axis(df, col_name:str, **kwargs):
+def make_strcat_axis(df, col_name:str, **kwargs):
     """
     Helper method to create category integer axis form a dataframe
-
-    TODO: refactor to a helper module
     """
 
     if df[col_name].dtype.kind not in ("s", "O"):
@@ -55,7 +53,7 @@ def _make_strcat_axis(df, col_name:str, **kwargs):
 
     return hist.axis.StrCategory(sorted(df[col_name].unique()), name=col_name, **kwargs)
 
-def _make_regaxis(df, col_name:str, bin_size:int, **kwargs):
+def make_regaxis(df, col_name:str, bin_size:int, **kwargs):
     if df[col_name].dtype.kind not in ("i", "u", "f"):
         raise TypeError(f"Column {col_name} is not of type numeric")
     
@@ -63,7 +61,7 @@ def _make_regaxis(df, col_name:str, bin_size:int, **kwargs):
 
 
 
-def _build_histogram(df, axes:list, weight: Optional[str]=None):
+def build_histogram(df, axes:list, weight: Optional[str]=None):
     """Build an histogram from a collection of axes
 
     Args:
