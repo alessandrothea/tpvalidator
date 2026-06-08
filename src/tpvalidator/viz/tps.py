@@ -20,11 +20,11 @@ from .textual import dataframe_to_rich_table
 class TrgPrimitivesPlotter:
     
     _electronics_noise_label : str = 'DetSimElecNoise'
-    _default_var_specs = [
-        {'name':'adc_peak', 'bin_size':10},
-        {'name':'samples_over_threshold', 'bin_size': 2},
-        {'name':'adc_integral', 'bin_size': 10}
-    ]
+    _default_var_specs = {
+        'adc_peak': {'name':'adc_peak', 'bin_size':10},
+        'samples_over_threshold': {'name':'samples_over_threshold', 'bin_size': 2},
+        'adc_integral': {'name':'adc_integral', 'bin_size': 10}
+    }
 
     def __init__(
         self,
@@ -135,7 +135,7 @@ class TrgPrimitivesPlotter:
     
     
 
-    def make_hist(self, query: Optional[str]=None, var_spec:list[dict]|dict=[], categories: list[str]=['readout_plane_id'], weight: Optional[str]=None, event_filter: Optional[dict]=None):
+    def make_hist(self, query: Optional[str]=None, var_spec:list[dict|str]|dict|str=[], categories: list[str]=['readout_plane_id'], weight: Optional[str]=None, event_filter: Optional[dict]=None):
 
         df = self._df
 
@@ -161,12 +161,8 @@ class TrgPrimitivesPlotter:
             var_spec = [var_spec]
 
         for vs in var_spec:
-            # if isinstance(vs, str):
-            #     vs = self.var_specs.get(vs)
-            # elif isinstance(vs, dict):
-            #     v_name = vs['name']
-            #     v_bin_size = vs['bin_size']
-            #     v_label = vs.get('label', v_name)
+            if isinstance(vs, str):
+                vs = self.var_specs.get(vs)
 
             v_name = vs['name']
             v_bin_size = vs['bin_size']
