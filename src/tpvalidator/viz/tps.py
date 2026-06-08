@@ -49,7 +49,11 @@ class TrgPrimitivesPlotter:
         # Initialize block map
         self._init_tp_origin_block_map()
 
+        # Initialize geometry
         self._init_det_geo(geo)
+
+        # Make initialize var specs to allow tweaking
+        self.var_specs = self._default_var_specs.copy()
 
     
     def _init_det_geo(self, geo: Literal['1x8x14']):
@@ -137,11 +141,11 @@ class TrgPrimitivesPlotter:
 
         # TODO: generalize
         if event_filter:
-            ev_name = event_filter['collection']
-            ev_filter = event_filter['filter']
+            evf_collection = event_filter['collection']
+            evf_filter = event_filter['filter']
 
-            coll = getattr(self.ws, ev_name)
-            index_list = coll.query(ev_filter).index
+            coll = self.ws.get_df(evf_collection)
+            index_list = coll.query(evf_filter).index
 
             # Extract the top level
             top_level = {idx[0] for idx in index_list}
@@ -156,10 +160,18 @@ class TrgPrimitivesPlotter:
         if isinstance(var_spec, dict):
             var_spec = [var_spec]
 
-        for s in var_spec:
-            v_name = s['name']
-            v_bin_size = s['bin_size']
-            v_label = s.get('label', v_name)
+        for vs in var_spec:
+            # if isinstance(vs, str):
+            #     vs = self.var_specs.get(vs)
+            # elif isinstance(vs, dict):
+            #     v_name = vs['name']
+            #     v_bin_size = vs['bin_size']
+            #     v_label = vs.get('label', v_name)
+
+            v_name = vs['name']
+            v_bin_size = vs['bin_size']
+            v_label = vs.get('label', v_name)
+            
             var_axis = hist.axis.Regular( *compute_regaxis_specs(df[v_name], v_bin_size), name=v_name, label=v_label)
             h_spec.append(var_axis)
 
@@ -239,7 +251,7 @@ class TrgPrimitivesPlotter:
     def make_generator_activity_table(self,
                                     query: Optional[str] = None,
                                     norm: Literal['counts', 'rate'] = 'rate',
-                                    det_geo: Literal['default', 'crp', 'tpc'] = 'default'
+                                    geo_norm: Literal['default', 'crp', 'tpc'] = 'default'
                                     ) -> Table:
         """Return a rich Table of generator activity, ranked by count or rate.
 
@@ -250,7 +262,7 @@ class TrgPrimitivesPlotter:
         norm:
             ``'counts'`` to show raw hit counts; ``'rate'`` to normalise by
             simulated time and express in Hz (default).
-        det_geo:
+        geo_norm:
             Geometric normalisation applied on top of ``norm``: ``'default'``
             uses the full simulation volume (no extra factor), ``'crp'``
             divides by the number of CRPs, ``'tpc'`` divides by the number of
@@ -268,6 +280,7 @@ class TrgPrimitivesPlotter:
         h_counts = self.make_generator_counts_hist(query)
 
 
+        # TODO: The norm and geo norm handling is general. Refactor in a separate method
         match norm:
             case 'counts':
                 norm_unit = 1.
@@ -284,7 +297,7 @@ class TrgPrimitivesPlotter:
             case _:
                 raise ValueError(f'Invalid normalisation {norm}')
         
-        match det_geo:
+        match geo_norm:
             case 'default':
                 # use the simulation geometry
                 norm_geo = 1.
@@ -293,10 +306,10 @@ class TrgPrimitivesPlotter:
             case 'tpc':
                 norm_geo = 1./self.geo.num_tpcs
             case _:
-                raise ValueError(f"Invalid 'detgeo' parameter {det_geo}")
+                raise ValueError(f"Invalid 'detgeo' parameter {geo_norm}")
 
         h_counts *= norm_unit*norm_geo
-        det_name = self.geo.name if det_geo=='default' else det_geo
+        det_name = self.geo.name if geo_norm=='default' else geo_norm
 
         c_df = pd.DataFrame({
             'generator': [l if len(l) > 0 else self._electronics_noise_label for l in h_counts.axes[0]],
@@ -311,7 +324,10 @@ class TrgPrimitivesPlotter:
                             var_spec:dict,
                             rop: int,
                             n_top: int=10,
+                            norm: Literal['counts', 'rate'] = 'counts',
+                            geo_norm: Literal['default', 'crp', 'tpc'] = 'default',
                             query: Optional[str] = None,
+                            ax: Optional[object] = None,
                             **fig_kwargs
         ):
         """Plot a TP variable distribution broken down by backtracked generator.
@@ -335,6 +351,33 @@ class TrgPrimitivesPlotter:
         matplotlib.figure.Figure
         """
         h_var = self.make_hist(query=query, var_spec=var_spec, categories=['bt_generator_name', 'readout_plane_id'])
+
+        match norm:
+            case 'counts':
+                clabel = 'counts'
+                title_units = 'counts'
+                norm_unit = 1
+            case 'rate':
+                clabel = 'Rates [Hz]'
+                title_units = 'rates'
+                norm_unit = 1 / self.simulated_time()
+            case _:
+                raise RuntimeError(f"norm ({norm!r}) must be 'counts' or 'rate'")
+            
+        match geo_norm:
+            case 'default':
+                # use the simulation geometry
+                norm_geo = 1.
+            case 'crp':
+                norm_geo = 1./self.geo.num_crps                
+            case 'tpc':
+                norm_geo = 1./self.geo.num_tpcs
+            case _:
+                raise ValueError(f"Invalid 'detgeo' parameter {geo_norm}")
+            
+        h_var *= norm_unit*norm_geo
+
+        
         h2_var = h_var[{'readout_plane_id':rop}]
         s = h2_var.stack("bt_generator_name")
 
@@ -343,17 +386,70 @@ class TrgPrimitivesPlotter:
         if 'figsize' not in fig_kwargs:
             fig_kwargs['fig_size'] = (8,5)
 
-        fig, ax = plt.subplots(**fig_kwargs)
+        fig, ax = plt.subplots(**fig_kwargs) if ax is None else ax.figure, ax
+
+        # if ax is None:
+        #     fig, ax = plt.subplots(**fig_kwargs)
+        # else:
+        #     fig = ax.figure
+
         for h in h_top:
             hep.histplot(h, ax=ax, label=h.name if h.name else self._electronics_noise_label, yerr=False)
 
         # s.plot(ax=ax)
         ax.legend()
+        ax.set_ylabel(clabel)
         ax.set_yscale('log')
+        
 
         fig.tight_layout()
         return fig
     
+
+    def plot_2d_var_dist(self, var_spec_x, var_spec_y, rop=2, weight=None, cmap:str=None, bt_generator_name:str=None, ev_filter:dict=None, ax=None, 
+                                **fig_kwargs
+                        ):
+        # histogram categories
+        cats = ['readout_plane_id', 'bt_is_signal', 'bt_generator_name']
+
+        h = self.make_hist(var_spec=[var_spec_x, var_spec_y], categories=cats, weight=weight, event_filter=ev_filter)
+
+        fig, ax = plt.subplots(**fig_kwargs) if ax is None else ax.figure, ax
+
+        bt_gen = bt_generator_name if bt_generator_name else sum
+
+        artists = hep.hist2dplot(h[rop*1j,1j,bt_gen,:,:], norm=LogNorm(), cmap=cmap, ax=ax)
+        artists.cbar.set_label("Counts")
+
+        return fig
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #--------------------------------------------------------------

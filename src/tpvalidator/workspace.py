@@ -62,10 +62,18 @@ class TriggerAnalysisWorkspace:
                 self._trees[t] = ttree
 
     def __getattr__(self, name):
-        if name in self.tree_names:
-            return self._get_dataframe(name)
-        else:
-            raise AttributeError(name)
+        if '_trees' in self.__dict__:
+            if name.endswith('_tree') and (base := name[:-5]) in self._trees:
+                return self._trees[base]
+            if name in self.tree_names:
+                return self._get_dataframe(name)
+        raise AttributeError(name)
+
+    def get_tree(self, name):
+        return self._trees[name]
+
+    def get_df(self, name) -> TrgDataFrame:
+        return self._get_dataframe(name)
 
     def _load_dataframe(self, tree):
         cut = None
@@ -93,7 +101,7 @@ class TriggerPrimitivesWorkspace:
         'mcneutrinos',
         'mcparticles',
         'simides',
-        'simides_summary',
+        'simide_summary',
         'tps',
     ]
 
@@ -159,14 +167,7 @@ class TriggerPrimitivesWorkspace:
         self._log.info("Adding processing info")
         self.info = self._tuple_rdr.get_info(self._info_name)
 
-        standard_trees = [
-            'event_summary',
-            'mctruths',
-            'mcneutrinos',
-            'mcparticles',
-            'simides',
-            'simides_summary',
-        ]
+        standard_trees = [t for t in self.tree_names if t != 'tps']
 
         for t in standard_trees:
             self._log.info(f"Adding '{t}' data")
@@ -204,9 +205,18 @@ class TriggerPrimitivesWorkspace:
 
 
     def __getattr__(self, name):
-        if '_dataframes' in self.__dict__ and name in self.tree_names:
-            return self._get_dataframe(name)
+        if '_trees' in self.__dict__:
+            if name.endswith('_tree') and (base := name[:-5]) in self._trees:
+                return self._trees[base]
+            if '_dataframes' in self.__dict__ and name in self.tree_names:
+                return self._get_dataframe(name)
         raise AttributeError(name)
+
+    def get_tree(self, name):
+        return self._trees[name]
+
+    def get_df(self, name) -> TrgDataFrame:
+        return self._get_dataframe(name)
 
 
     def _get_dataframe(self, name) -> TrgDataFrame:

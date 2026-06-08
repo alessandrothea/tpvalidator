@@ -112,6 +112,6 @@ class TestFDVDGeometryGeoLoad:
     def test_no_geo_resource_raises(self):
         # Use a tpc_geo tuple not shared with any module-level singleton so the
         # cache lookup misses and the None-resource guard is actually exercised.
-        g = FDVDGeometry(tpc_geo=(99, 99, 99), geo_resource=None)
+        g = FDVDGeometry(name='test', tpc_geo=(99, 99, 99), geo_resource=None)
         with pytest.raises(ValueError):
             g.geo()
