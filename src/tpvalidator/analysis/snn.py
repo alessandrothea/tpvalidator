@@ -15,7 +15,7 @@ import mplhep as hep
 
 from .histograms import hist_mean_std_uproot as hist_mean_std, hist_stats, linspace
 from ..workspace import TriggerPrimitivesWorkspace
-from ..utils import subplot_autogrid, calculate_trg_obj_rates
+from ..utils import subplots_autogrid, calculate_trg_obj_rates
 
 
 
@@ -458,7 +458,7 @@ class TPSignalNoiseAnalyzer:
     #     # Split the dataset into bins by depth
     #     g = tps.sig_view[2].groupby(pd.cut(tps.sig_view_2.TP_trueX, n_x_bins))
 
-    #     fig, axes = subplot_autogrid(len(g), figsize=figsize, sharey=True)
+    #     fig, axes = subplots_autogrid(len(g), figsize=figsize, sharey=True)
 
     #     col=f'TP_{var}'
 
@@ -488,7 +488,7 @@ class TPSignalNoiseAnalyzer:
         # Split the dataset into bins by depth
         g = tps.sig_by_view[roview].groupby(pd.cut(tps.sig_by_view[roview].bt_primary_x, n_x_bins), observed=False)
 
-        fig, axes = subplot_autogrid(len(g), figsize=figsize, sharex=sharex, sharey=sharey)
+        fig, axes = subplots_autogrid(len(g), figsize=figsize, sharex=sharex, sharey=sharey)
 
         col=f'{var}'
 
@@ -539,7 +539,7 @@ class TPSignalNoiseAnalyzer:
         # 3. Reshape into a histogram table: rows = x_bin, columns = track_size
         hist_table = result.unstack("track_size", fill_value=0).sort_index(axis=1)
 
-        fig, axes = subplot_autogrid(len(hist_table), figsize=figsize, sharex=sharex, sharey=sharey)
+        fig, axes = subplots_autogrid(len(hist_table), figsize=figsize, sharex=sharex, sharey=sharey)
         for ax, (x_bin, row) in zip(axes.values(), hist_table.iterrows()):
             sizes = row.index.astype(int).to_numpy()
             counts = row.values

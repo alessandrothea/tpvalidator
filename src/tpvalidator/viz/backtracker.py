@@ -5,7 +5,7 @@ import matplotlib.patches as patches
 
 from ..workspace import TriggerPrimitivesWorkspace
 from typing import Optional
-from ..utils import subplot_autogrid
+from ..utils import subplots_autogrid
 from rich import print
 
 class BackTrackerPlotter:
@@ -67,7 +67,7 @@ class BackTrackerPlotter:
             case 'lin':
                 fig, axes = plt.subplots(1, len(tps), figsize=figsize)
             case 'grid':
-                fig, axes = subplot_autogrid(len(tps), figsize=figsize)
+                fig, axes = subplots_autogrid(len(tps), figsize=figsize)
             case _:
                 raise ValueError(f"Layout value '{layout} unknown")
 

@@ -36,7 +36,7 @@ def get_hist_layout(n_items, layout=None):
     return (nrows, ncols)
 
 
-def subplot_autogrid(n_plots, **kwargs):
+def subplots_autogrid(n_plots, **kwargs):
     n_rows, n_cols = get_hist_layout(n_plots)
 
     mosaic = []

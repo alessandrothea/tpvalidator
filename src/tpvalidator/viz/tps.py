@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import hist
 import mplhep as hep
+import copy
 
 from typing import Literal, Optional
 from rich.table import Table
@@ -53,7 +54,7 @@ class TrgPrimitivesPlotter:
         self._init_det_geo(geo)
 
         # Make initialize var specs to allow tweaking
-        self.var_specs = self._default_var_specs.copy()
+        self.var_specs = copy.deepcopy(self._default_var_specs)
 
     
     def _init_det_geo(self, geo: Literal['1x8x14']):
@@ -135,7 +136,13 @@ class TrgPrimitivesPlotter:
     
     
 
-    def make_hist(self, query: Optional[str]=None, var_spec:list[dict|str]|dict|str=[], categories: list[str]=['readout_plane_id'], weight: Optional[str]=None, event_filter: Optional[dict]=None):
+    def make_hist(self,
+                var_spec:list[dict|str]|dict|str=[],
+                categories: list[str]=['readout_plane_id'],
+                weight: Optional[str]=None,
+                query: Optional[str]=None,
+                event_filter: Optional[dict]=None
+            ):
 
         df = self._df
 
@@ -145,12 +152,18 @@ class TrgPrimitivesPlotter:
             evf_filter = event_filter['filter']
 
             coll = self.ws.get_df(evf_collection)
+
+            # TODO: switch to using event_uid
             index_list = coll.query(evf_filter).index
 
             # Extract the top level
             top_level = {idx[0] for idx in index_list}
 
             df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
+
+
+            # coll.query(evf_filter).event_uid.unique()
+            
 
         if query:
             df = df.query(query)
@@ -175,8 +188,8 @@ class TrgPrimitivesPlotter:
         return h
         
 
-
-    def make_var_hist(self, var:str, var_binsize: int, query: Optional[str]=None):
+    
+    def make_var_hist(self, var:str, var_binsize: int, **kwargs):
 
         """Build and fill a 3-axis histogram over readout plane, backtracker signal flag, and a TP variable.
 
@@ -193,11 +206,11 @@ class TrgPrimitivesPlotter:
         """
 
         var_spec={'name':var, 'bin_size':var_binsize, 'label':var}
-        return self.make_hist(query, var_spec=var_spec, categories=['readout_plane_id', 'bt_is_signal'])
+        return self.make_hist(var_spec=var_spec, categories=['readout_plane_id', 'bt_is_signal'], **kwargs)
     
     
 
-    def make_cutsequence_hist(self, var:str, cuts: list[float], weight:str=None):
+    def make_cutsequence_hist_legacy(self, var:str, cuts: list[float], weight:str=None, ):
         """Build a cumulative histogram over a variable-width cut sequence.
 
         Creates a 3-axis histogram (readout plane, backtracker signal flag, variable)
@@ -225,6 +238,45 @@ class TrgPrimitivesPlotter:
         h_cs = cumsum_hist_nd(h, var, direction='right', flow=True)
 
         return h_cs
+    
+    def make_cutsequence_hist(self,
+                            cut_var:str,
+                            cuts: list[float],
+                            categories:list[str]=['readout_plane_id', 'bt_is_signal'],
+                            weight: Optional[str]=None,
+                            query: Optional[str]=None,
+                            event_filter: Optional[dict]=None
+                            ):
+        
+        df = self._df
+
+        # TODO: generalize
+        if event_filter:
+            evf_collection = event_filter['collection']
+            evf_filter = event_filter['filter']
+
+            coll = self.ws.get_df(evf_collection)
+            index_list = coll.query(evf_filter).index
+
+            # Extract the top level
+            top_level = {idx[0] for idx in index_list}
+
+            df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
+
+
+        if query:
+            df = df.query(query)
+        
+        h_spec = self._get_cat_axis_list(df, categories)
+        h_spec.append(
+            hist.axis.Variable(cuts, name=cut_var)
+        )
+        h = build_histogram(df, h_spec, weight=weight)
+
+        # Calculate the cumulative histogram
+        h_cs = cumsum_hist_nd(h, cut_var, direction='right', flow=True)
+
+        return h_cs
 
 
     def make_generator_counts_hist(self, query: Optional[str] = None) -> hist.Hist:
@@ -241,7 +293,7 @@ class TrgPrimitivesPlotter:
             filling (e.g. ``'pdg == 11'`` to select electrons only).
         """
 
-        return self.make_hist(query=query, categories=['bt_generator_name', 'readout_plane_id'])
+        return self.make_hist(categories=['bt_generator_name', 'readout_plane_id'], query=query)
     
 
     def make_generator_activity_table(self,
@@ -317,7 +369,7 @@ class TrgPrimitivesPlotter:
 
 
     def plot_var_by_generator(self,
-                            var_spec:dict,
+                            var_spec:dict|str,
                             rop: int,
                             n_top: int=10,
                             norm: Literal['counts', 'rate'] = 'counts',
@@ -346,6 +398,10 @@ class TrgPrimitivesPlotter:
         -------
         matplotlib.figure.Figure
         """
+
+        if isinstance(var_spec, str):
+            var_spec = self.var_specs[var_spec]
+
         h_var = self.make_hist(query=query, var_spec=var_spec, categories=['bt_generator_name', 'readout_plane_id'])
 
         match norm:
@@ -382,12 +438,8 @@ class TrgPrimitivesPlotter:
         if 'figsize' not in fig_kwargs:
             fig_kwargs['fig_size'] = (8,5)
 
-        fig, ax = plt.subplots(**fig_kwargs) if ax is None else ax.figure, ax
-
-        # if ax is None:
-        #     fig, ax = plt.subplots(**fig_kwargs)
-        # else:
-        #     fig = ax.figure
+        create_fig = ax is None
+        fig, ax = plt.subplots(**fig_kwargs) if create_fig else (ax.figure, ax)
 
         for h in h_top:
             hep.histplot(h, ax=ax, label=h.name if h.name else self._electronics_noise_label, yerr=False)
@@ -397,8 +449,9 @@ class TrgPrimitivesPlotter:
         ax.set_ylabel(clabel)
         ax.set_yscale('log')
         
-
-        fig.tight_layout()
+        
+        if create_fig:
+            fig.tight_layout()
         return fig
     
 
@@ -410,13 +463,16 @@ class TrgPrimitivesPlotter:
 
         h = self.make_hist(var_spec=[var_spec_x, var_spec_y], categories=cats, weight=weight, event_filter=ev_filter)
 
-        fig, ax = plt.subplots(**fig_kwargs) if ax is None else ax.figure, ax
+        create_fig = ax is None
+        fig, ax = plt.subplots(**fig_kwargs) if create_fig else (ax.figure, ax)
 
         bt_gen = bt_generator_name if bt_generator_name else sum
 
         artists = hep.hist2dplot(h[rop*1j,1j,bt_gen,:,:], norm=LogNorm(), cmap=cmap, ax=ax)
         artists.cbar.set_label("Counts")
 
+        if create_fig:
+            fig.tight_layout()
         return fig
 
 
