@@ -23,11 +23,13 @@ class TestApplyDBScan:
         df = pd.concat([df_a, df_b], ignore_index=True)
 
         n_clusters, _, _, _ = ApplyDBScan(df, epsilon=1.5, min_samples=2)
+        print(f"\nn_clusters: {n_clusters}, expected: 2")
         assert n_clusters == 2
 
     def test_single_isolated_point_is_noise(self):
         df = pd.DataFrame({"channel": [0], "sample_start": [0], "adc_integral": [50]})
         n_clusters, mean_sadc, total_sadc, max_sadc = ApplyDBScan(df, epsilon=1.5, min_samples=2)
+        print(f"\nn_clusters={n_clusters}, mean_sadc={mean_sadc}, total_sadc={total_sadc}, max_sadc={max_sadc}")
         assert n_clusters == 0
         assert mean_sadc == 0
         assert total_sadc == 0
@@ -41,6 +43,8 @@ class TestApplyDBScan:
         df = pd.concat([df_a, df_b], ignore_index=True)
 
         n_clusters, mean_sadc, total_sadc, max_sadc = ApplyDBScan(df, epsilon=1.5, min_samples=2)
+        print(f"\nn_clusters={n_clusters}, total_sadc={total_sadc} (exp {400+800}), "
+              f"max_sadc={max_sadc} (exp 800), mean_sadc={mean_sadc} (exp {(400+800)/2})")
         assert n_clusters == 2
         assert total_sadc == pytest.approx(400 + 800)
         assert max_sadc == pytest.approx(800)
@@ -50,6 +54,7 @@ class TestApplyDBScan:
         # All points within epsilon of each other
         df = _make_cluster_df([0, 0, 1, 1], [0, 1, 0, 1], adc_value=50)
         n_clusters, mean_sadc, total_sadc, max_sadc = ApplyDBScan(df, epsilon=1.5, min_samples=2)
+        print(f"\nn_clusters={n_clusters}, total_sadc={total_sadc} (expected {50 * len(df)})")
         assert n_clusters == 1
         assert total_sadc == pytest.approx(50 * len(df))
 
@@ -57,4 +62,5 @@ class TestApplyDBScan:
         df = pd.DataFrame({"channel": [0, 1], "sample_start": [0, 1], "adc_integral": [10, 20]})
         original_cols = set(df.columns)
         ApplyDBScan(df)
+        print(f"\ncols before: {original_cols}, cols after: {set(df.columns)}")
         assert set(df.columns) == original_cols

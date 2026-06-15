@@ -71,7 +71,11 @@ def build_histogram(df, axes:list, weight: Optional[str]=None):
         _type_: _description_
     """
 
-    h = hist.Hist(*axes)
+    storage = None
+    if weight is not None:
+        storage = hist.storage.Weight()
+
+    h = hist.Hist(*axes, storage=storage)
 
     kwa = {
         a.name: df[a.name]
@@ -231,7 +235,7 @@ def _auto_range_full(values: np.ndarray) -> tuple[float, float]:
     return lo, hi
 
 
-def compute_regaxis_specs(series: pd.Series, bin_size: int, direction: Literal['left', 'right']='right'):
+def compute_regaxis_specs(series: pd.Series, bin_size: int, direction: Literal['left', 'right']='right', binning_type:Literal['float', 'int']='float'):
     """
     Compute the inclusive histogram binning range for a choice of bin size
 
@@ -246,6 +250,15 @@ def compute_regaxis_specs(series: pd.Series, bin_size: int, direction: Literal['
     import math
     lo     = float(series.min())
     hi     = float(series.max())
+
+    match binning_type:
+        case 'float':
+            pass
+        case 'int':
+            lo=math.floor(lo)-0.5
+            hi=math.ceil(hi)+0.5
+        case _:
+            raise ValueError(f"Invalid binning type '{binning_type}'")
 
     num_bins = math.floor((hi-lo)/bin_size)+1
 
@@ -415,65 +428,58 @@ def quantiles(
 def cumsum_hist(
     h: hist.Hist,
     direction: Literal["left", "right"] = "left",
-    normalise: bool = False,
-    flow: bool = False,
 ) -> hist.Hist:
     """
-    Compute the cumulative sum of a 1D hist.Hist.
+    Compute the cumulative sum of a 1D hist.Hist (under/overflow always included).
+
+    The "own" flow bin mirrors the source: underflow for direction="left",
+    overflow for direction="right".  The "other" flow bin stores the grand
+    total (norm = sum of all source bins including flow), which is the natural
+    denominator for efficiency calculations.
 
     Parameters
     ----------
     h         : source histogram
     direction : 'left'  → cumsum low-to-high (events below threshold)
                 'right' → cumsum high-to-low (events above threshold)
-    normalise : if True, scale to [0, 1]
-    flow      : if True, include under/overflow bins in the cumulative sum.
-                Underflow is added as a constant offset for 'left';
-                overflow for 'right'. Both contribute to the normalisation total.
 
     Returns
     -------
-    A new hist.Hist with the same axis as the source.
+    A new hist.Hist with the same axis as the source (both flow bins enabled).
     """
     if h.ndim != 1:
         raise ValueError(f"Expected a 1D histogram, got {h.ndim}D.")
 
-    under, vals, over, under_var, vars_, over_var = _extract_flow(h, flow=flow)
+    under, vals, over, under_var, vars_, over_var = _extract_flow(h, flow=True)
 
     if direction == "left":
         cum = np.cumsum(vals) + under
         cum_vars = np.cumsum(vars_) + under_var
-        norm = cum[-1] + over
+        norm,     norm_var     = cum[-1] + over,   cum_vars[-1] + over_var
     elif direction == "right":
         cum = np.cumsum(vals[::-1])[::-1] + over
         cum_vars = np.cumsum(vars_[::-1])[::-1] + over_var
-        norm = cum[0] + under
+        norm,     norm_var     = cum[0]  + under,  cum_vars[0]  + under_var
     else:
         raise ValueError(f"direction must be 'left' or 'right', got '{direction}'.")
 
-    if normalise and norm != 0:
-        cum_vars = cum_vars / (norm ** 2)
-        cum = cum / norm
-
     axis = h.axes[0]
-    use_under = flow and direction == "left"
-    use_over  = flow and direction == "right"
-
     cum_axis = hist.axis.Variable(
         axis.edges,
         name=axis.name,
         label=getattr(axis, "label", None),
-        underflow=use_under,
-        overflow=use_over,
+        underflow=True,
+        overflow=True,
     )
     cum_hist = hist.Hist(cum_axis, storage=hist.storage.Weight())
-    v = cum_hist.view(flow=flow)
-    s = slice(1, None) if use_under else (slice(None, -1) if use_over else slice(None))
-    v.value[s],    v.variance[s]    = cum,   cum_vars
-    if use_under:
+    v = cum_hist.view(flow=True)
+    v.value[1:-1],    v.variance[1:-1]    = cum,      cum_vars
+    if direction == "left":
         v.value[0],  v.variance[0]  = under, under_var
-    if use_over:
+        v.value[-1], v.variance[-1] = norm,  norm_var
+    else:
         v.value[-1], v.variance[-1] = over,  over_var
+        v.value[0],  v.variance[0]  = norm,  norm_var
 
     return cum_hist
 
@@ -488,11 +494,15 @@ def cumsum_hist_nd(
     h: hist.Hist,
     axis: str | int,
     direction: Literal["left", "right"] = "left",
-    normalise: bool = False,
-    flow: bool = False,
 ) -> hist.Hist:
     """
-    Compute the cumulative sum of an ND hist.Hist along one named or indexed axis.
+    Compute the cumulative sum of an ND hist.Hist along one named or indexed axis
+    (under/overflow always included).
+
+    The "own" flow bin along the cumsum axis mirrors the source: underflow for
+    direction="left", overflow for direction="right".  The "other" flow bin stores
+    the per-slice grand total (norm), which is the natural denominator for
+    efficiency calculations.
 
     Parameters
     ----------
@@ -500,13 +510,13 @@ def cumsum_hist_nd(
     axis      : axis name (str) or index (int) along which to cumulate
     direction : 'left'  → cumsum low-to-high (events below threshold)
                 'right' → cumsum high-to-low (events above threshold)
-    normalise : if True, scale each slice to [0, 1] along the cumsum axis
-    flow      : if True, include under/overflow bins along the cumsum axis
 
     Returns
     -------
-    A new hist.Hist with the same axes as the source.
+    A new hist.Hist with the same axes as the source (both flow bins enabled on
+    the cumsum axis).
     """
+
     if isinstance(axis, str):
         names = [ax.name for ax in h.axes]
         if axis not in names:
@@ -517,43 +527,30 @@ def cumsum_hist_nd(
             raise ValueError(f"axis index {axis} out of range for {h.ndim}D histogram.")
         k = axis
 
-    vals_all = np.asarray(h.values(flow=flow), dtype=float)
-    variances = h.variances(flow=flow) if flow else h.variances()
+    vals_all = np.asarray(h.values(flow=True), dtype=float)
+    variances = h.variances(flow=True)
     vars_all = np.asarray(variances, dtype=float) if variances is not None else np.zeros_like(vals_all)
 
-    if flow:
-        under     = _ax_slice(vals_all, slice(0, 1),    k)
-        vals      = _ax_slice(vals_all, slice(1, -1),   k)
-        over      = _ax_slice(vals_all, slice(-1, None), k)
-        under_var = _ax_slice(vars_all, slice(0, 1),    k)
-        vars_     = _ax_slice(vars_all, slice(1, -1),   k)
-        over_var  = _ax_slice(vars_all, slice(-1, None), k)
-    else:
-        shape_1 = list(vals_all.shape)
-        shape_1[k] = 1
-        under = over = np.zeros(shape_1)
-        under_var = over_var = np.zeros(shape_1)
-        vals  = vals_all
-        vars_ = vars_all
+    under     = _ax_slice(vals_all, slice(0, 1),    k)
+    vals      = _ax_slice(vals_all, slice(1, -1),   k)
+    over      = _ax_slice(vals_all, slice(-1, None), k)
+    under_var = _ax_slice(vars_all, slice(0, 1),    k)
+    vars_     = _ax_slice(vars_all, slice(1, -1),   k)
+    over_var  = _ax_slice(vars_all, slice(-1, None), k)
 
     if direction == "left":
         cum      = np.cumsum(vals,  axis=k) + under
         cum_vars = np.cumsum(vars_, axis=k) + under_var
-        norm = _ax_slice(cum, slice(-1, None), k) + over
+        norm     = _ax_slice(cum,      slice(-1, None), k) + over
+        norm_var = _ax_slice(cum_vars, slice(-1, None), k) + over_var
     elif direction == "right":
         cum      = np.flip(np.cumsum(np.flip(vals,  k), k), k) + over
         cum_vars = np.flip(np.cumsum(np.flip(vars_, k), k), k) + over_var
-        norm = _ax_slice(cum, slice(0, 1), k) + under
+        norm     = _ax_slice(cum,      slice(0, 1), k) + under
+        norm_var = _ax_slice(cum_vars, slice(0, 1), k) + under_var
     else:
         raise ValueError(f"direction must be 'left' or 'right', got '{direction}'.")
 
-    if normalise:
-        safe_norm = np.where(norm != 0, norm, 1.0)
-        cum_vars  = np.where(norm != 0, cum_vars / safe_norm ** 2, 0.0)
-        cum       = np.where(norm != 0, cum / safe_norm, 0.0)
-
-    use_under = flow and direction == "left"
-    use_over  = flow and direction == "right"
     new_axes = []
     for i, a in enumerate(h.axes):
         if i == k:
@@ -561,29 +558,32 @@ def cumsum_hist_nd(
                 a.edges,
                 name=a.name,
                 label=getattr(a, "label", None),
-                underflow=use_under,
-                overflow=use_over,
+                underflow=True,
+                overflow=True,
             ))
         else:
             new_axes.append(a)
 
     result = hist.Hist(*new_axes, storage=hist.storage.Weight())
-    v = result.view(flow=flow)
+    v = result.view(flow=True)
 
     def _idx(s):
         idx = [slice(None)] * h.ndim
         idx[k] = s
         return tuple(idx)
 
-    s = slice(1, None) if use_under else (slice(None, -1) if use_over else slice(None))
-    v.value[_idx(s)]    = cum
-    v.variance[_idx(s)] = cum_vars
-    if use_under:
+    v.value[_idx(slice(1, -1))]    = cum
+    v.variance[_idx(slice(1, -1))] = cum_vars
+    if direction == "left":
         v.value[_idx(0)]    = under.squeeze(axis=k)
         v.variance[_idx(0)] = under_var.squeeze(axis=k)
-    if use_over:
+        v.value[_idx(-1)]    = norm.squeeze(axis=k)
+        v.variance[_idx(-1)] = norm_var.squeeze(axis=k)
+    else:
         v.value[_idx(-1)]    = over.squeeze(axis=k)
         v.variance[_idx(-1)] = over_var.squeeze(axis=k)
+        v.value[_idx(0)]    = norm.squeeze(axis=k)
+        v.variance[_idx(0)] = norm_var.squeeze(axis=k)
 
     return result
 

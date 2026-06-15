@@ -18,12 +18,14 @@ from .textual import dataframe_to_rich_table
 
 
 
+
+
 class TrgPrimitivesPlotter:
     
     _electronics_noise_label : str = 'DetSimElecNoise'
     _default_var_specs = {
         'adc_peak': {'name':'adc_peak', 'bin_size':10},
-        'samples_over_threshold': {'name':'samples_over_threshold', 'bin_size': 2},
+        'samples_over_threshold': {'name':'samples_over_threshold', 'bin_size': 1, 'type': 'int'},
         'adc_integral': {'name':'adc_integral', 'bin_size': 10}
     }
 
@@ -134,7 +136,16 @@ class TrgPrimitivesPlotter:
                 
         return h_spec
     
-    
+    def _apply_event_filter(self, df, event_filter:dict):
+        evf_collection = event_filter['collection']
+        evf_filter = event_filter['filter']
+
+        coll = self.ws.get_df(evf_collection)
+
+        ev_uids = coll.query(evf_filter).event_uid.unique()
+        df = df[df.event_uid.isin(ev_uids)]
+
+        return df
 
     def make_hist(self,
                 var_spec:list[dict|str]|dict|str=[],
@@ -143,27 +154,52 @@ class TrgPrimitivesPlotter:
                 query: Optional[str]=None,
                 event_filter: Optional[dict]=None
             ):
+        """Build a boost-histogram from the TP dataframe.
 
+        Args:
+            var_spec: Variable(s) to histogram. Each entry is either a string key
+                into ``self.var_specs`` or a dict with keys ``name``, ``bin_size``,
+                and optionally ``label`` and ``type``. A single dict is accepted
+                in place of a one-element list.
+            categories: Column names to use as categorical axes. Defaults to
+                ``['readout_plane_id']``.
+            weight: Column name whose values are used as per-entry weights.
+            query: Pandas query string applied to the dataframe before filling.
+            event_filter: Restrict entries to events that pass a filter on a
+                different collection. Dict with keys ``'collection'`` (name passed
+                to ``ws.get_df()``) and ``'filter'`` (query string applied to that
+                collection); only rows whose ``event_uid`` appears in the filtered
+                collection are kept.
+
+        Returns:
+            boost_histogram.Histogram with one categorical axis per category and
+            one regular axis per variable.
+        """
         df = self._df
 
         # TODO: generalize
         if event_filter:
-            evf_collection = event_filter['collection']
-            evf_filter = event_filter['filter']
+            # evf_collection = event_filter['collection']
+            # evf_filter = event_filter['filter']
 
-            coll = self.ws.get_df(evf_collection)
+            # coll = self.ws.get_df(evf_collection)
 
-            # TODO: switch to using event_uid
-            index_list = coll.query(evf_filter).index
+            # index_list = coll.query(evf_filter).index
 
-            # Extract the top level
-            top_level = {idx[0] for idx in index_list}
+            # # Extract the top level
+            # # top_level = {idx[0] for idx in index_list}
 
-            df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
+            # # df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
 
 
-            # coll.query(evf_filter).event_uid.unique()
+            # # TODO: switch to using event_uid
+            # ev_uids = coll.query(evf_filter).event_uid.unique()
+            # df = df[df.event_uid.isin(ev_uids)]
             
+            # print(f'MKH: evfilter "{evf_filter}": found {len(ev_uids)} entries')
+
+            df = self._apply_event_filter(df, event_filter)
+
 
         if query:
             df = df.query(query)
@@ -180,8 +216,12 @@ class TrgPrimitivesPlotter:
             v_name = vs['name']
             v_bin_size = vs['bin_size']
             v_label = vs.get('label', v_name)
+            v_type = vs.get('type', 'float')
             
-            var_axis = hist.axis.Regular( *compute_regaxis_specs(df[v_name], v_bin_size), name=v_name, label=v_label)
+            n_bins, xmin, xmax = compute_regaxis_specs(df[v_name], v_bin_size, binning_type=v_type)
+
+            var_axis = hist.axis.Regular( n_bins, xmin, xmax, name=v_name, label=v_label)
+
             h_spec.append(var_axis)
 
         h = build_histogram(df, h_spec, weight=weight)
@@ -235,7 +275,7 @@ class TrgPrimitivesPlotter:
         h = build_histogram(self._df, h_spec, weight=weight)
 
         # Calculate the cumulative histogram
-        h_cs = cumsum_hist_nd(h, var, direction='right', flow=True)
+        h_cs = cumsum_hist_nd(h, var, direction='right')
 
         return h_cs
     
@@ -252,21 +292,18 @@ class TrgPrimitivesPlotter:
 
         # TODO: generalize
         if event_filter:
-            evf_collection = event_filter['collection']
-            evf_filter = event_filter['filter']
+            # evf_collection = event_filter['collection']
+            # evf_filter = event_filter['filter']
 
-            coll = self.ws.get_df(evf_collection)
-            index_list = coll.query(evf_filter).index
+            # coll = self.ws.get_df(evf_collection)
 
-            # Extract the top level
-            top_level = {idx[0] for idx in index_list}
-
-            df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
-
+            # ev_uids = coll.query(evf_filter).event_uid.unique()
+            # df = df[df.event_uid.isin(ev_uids)]
+            df = self._apply_event_filter(df, event_filter)
 
         if query:
             df = df.query(query)
-        
+
         h_spec = self._get_cat_axis_list(df, categories)
         h_spec.append(
             hist.axis.Variable(cuts, name=cut_var)
@@ -274,7 +311,7 @@ class TrgPrimitivesPlotter:
         h = build_histogram(df, h_spec, weight=weight)
 
         # Calculate the cumulative histogram
-        h_cs = cumsum_hist_nd(h, cut_var, direction='right', flow=True)
+        h_cs = cumsum_hist_nd(h, cut_var, direction='right')
 
         return h_cs
 

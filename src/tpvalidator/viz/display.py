@@ -33,7 +33,7 @@ class TriggerPrimitivesEventViewer:
         self.mctruths = getattr(ws, df_labels['mctruths'])
 
 
-    def draw_tps_point_of_origin(self, ev_uid: int, ev_label: str = "", is_signal: bool = None, readout_view = 2, **kwargs) -> None:
+    def draw_tps_point_of_origin(self, ev_uid: int, ev_label: str = "", readout_view = 2, **kwargs) -> None:
         """Draw the trigger primitives point of origin, based on backtracked informations
 
         Args:
@@ -41,13 +41,12 @@ class TriggerPrimitivesEventViewer:
             tp_data (BasicTPData): _description_
             ev_uid (int): _description_
             ev_label (str, optional): _description_. Defaults to "".
-            is_signal (bool, optional): _description_. Defaults to None.
         """
 
         fig, ax = plt.subplots(subplot_kw={'projection': '3d'}, **kwargs)
 
 
-        ws=self.ws
+        # ws=self.ws
         tps=self.tps
         mctruths=self.mctruths
 
@@ -60,10 +59,8 @@ class TriggerPrimitivesEventViewer:
 
         tps = tps.query(' & '.join([f'({q})' for q in selection]))
 
-        # TODO: add a check 
-        # print(mctruths.query(f'event_uid == {ev_uid}'))
-
-        # vmax = tps.adc_integral.max()/5
+        if len(tps) == 0:
+            return fig
 
 
         # equalize the range/
@@ -74,7 +71,7 @@ class TriggerPrimitivesEventViewer:
         scat = ax.scatter(tps.bt_primary_y, tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c=tps.adc_integral)#, vmin=vmin, vmax=vmax)
         # scat = ax.scatter(tps.bt_primary_y, tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c=tps.ta_win_id)#, vmin=vmin, vmax=vmax)
 
-        # # Add projections on the YZ plane (CRP) and XY plane (collection/drift)
+        # Add projections on the YZ plane (CRP) and XY plane (collection/drift)
         ax.scatter(np.full_like(tps.bt_primary_y, ax_ranges.bt_primary_y[0]), tps.bt_primary_z, tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
         ax.scatter(tps.bt_primary_y, np.full_like(tps.bt_primary_z, ax_ranges.bt_primary_z[1]), tps.bt_primary_x, s=tps.samples_over_threshold/2, c='gray')
         ax.scatter(tps.bt_primary_y, tps.bt_primary_z, np.full_like(tps.bt_primary_x, ax_ranges.bt_primary_x[0]), s=tps.samples_over_threshold/2, c='gray')
@@ -97,8 +94,7 @@ class TriggerPrimitivesEventViewer:
 
         fig, ax = plt.subplots(**kwargs)
         
-        ws=self.ws
-        tps=self.tps
+        tps=self.tps.query(f'event_uid == {ev_uid}')
         
 
         ax.scatter(x=tps.channel, y=tps.samples_to_peak, c=tps.TPCSetID)

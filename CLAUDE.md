@@ -46,3 +46,11 @@ the library backing them.
 - Heavy loops use **numba** JIT — keep numba-compiled functions in dedicated files
 - Physics quantities are in **cm** (positions) and **ADC counts** (charge)
 - VD drift direction is **x**; HD drift direction is **y**
+
+## Test conventions
+- Every assert must be preceded by a `print()` that shows the computed value(s) and
+  expected value(s), so developers can run `pytest -vs` to inspect results without
+  adding debug statements on the fly.
+- Prefer f-strings: `print(f"\n<label>: {got}, expected: {expected}")`
+- Skip prints only for `pytest.raises` blocks (nothing to show before the exception).
+- Run tests with `uv run pytest test/ -vs` to see all print output.
