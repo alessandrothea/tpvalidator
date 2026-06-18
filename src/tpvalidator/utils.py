@@ -28,7 +28,18 @@ def pandas_backend(backend):
     pd.options.plotting.backend = current_backend
 
 
-def get_hist_layout(n_items, layout=None):
+@contextmanager
+def fieldswapper(obj:object, name:str, value):
+
+    oldval = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield obj
+    finally:
+        setattr(obj, name, oldval)
+        
+
+def get_grid_layout(n_items, layout=None):
     if layout is not None:
         return layout
     ncols = math.ceil(math.sqrt(n_items))
@@ -37,7 +48,7 @@ def get_hist_layout(n_items, layout=None):
 
 
 def subplots_autogrid(n_plots, **kwargs):
-    n_rows, n_cols = get_hist_layout(n_plots)
+    n_rows, n_cols = get_grid_layout(n_plots)
 
     mosaic = []
     i = 0

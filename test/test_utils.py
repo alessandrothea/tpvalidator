@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from tpvalidator.utils import (
-    get_hist_layout,
+    get_grid_layout,
     compute_histogram_ratio,
     calculate_trg_obj_rates,
     temporary_log_level,
@@ -12,34 +12,34 @@ from tpvalidator.utils import (
 
 class TestGetHistLayout:
     def test_one_item(self):
-        got = get_hist_layout(1)
+        got = get_grid_layout(1)
         print(f"\nget_hist_layout(1): {got}, expected: (1, 1)")
         assert got == (1, 1)
 
     def test_four_items(self):
-        got = get_hist_layout(4)
+        got = get_grid_layout(4)
         print(f"\nget_hist_layout(4): {got}, expected: (2, 2)")
         assert got == (2, 2)
 
     def test_six_items(self):
         # ceil(sqrt(6))=3 cols, ceil(6/3)=2 rows
-        nrows, ncols = get_hist_layout(6)
+        nrows, ncols = get_grid_layout(6)
         print(f"\nget_hist_layout(6): ({nrows}, {ncols}), nrows*ncols={nrows*ncols} (expected >= 6)")
         assert nrows * ncols >= 6
 
     def test_nine_items(self):
-        got = get_hist_layout(9)
+        got = get_grid_layout(9)
         print(f"\nget_hist_layout(9): {got}, expected: (3, 3)")
         assert got == (3, 3)
 
     def test_explicit_layout_passthrough(self):
-        got = get_hist_layout(10, layout=(2, 5))
+        got = get_grid_layout(10, layout=(2, 5))
         print(f"\nget_hist_layout(10, layout=(2,5)): {got}, expected: (2, 5)")
         assert got == (2, 5)
 
     def test_output_covers_all_items(self):
         for n in range(1, 20):
-            nrows, ncols = get_hist_layout(n)
+            nrows, ncols = get_grid_layout(n)
             print(f"\nn={n}: ({nrows}, {ncols}), product={nrows*ncols}")
             assert nrows * ncols >= n
 
