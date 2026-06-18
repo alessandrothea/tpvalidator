@@ -165,7 +165,7 @@ class TriggerPrimitivesWorkspace:
 
         self._log.debug(f.keys())
         self._log.info("Adding processing info")
-        self.info = self._tuple_rdr.get_info(self._info_name)
+        self._info = self._tuple_rdr.get_info(self._info_name)
 
         standard_trees = [t for t in self.tree_names if t != 'tps']
 
@@ -260,6 +260,15 @@ class TriggerPrimitivesWorkspace:
     @property
     def name(self):
         return self._name
+
+    @property
+    def info(self):
+        return self._info
+
+    @property
+    def extra_info(self):
+        return self._extra_info
+
 
     @property
     def tp_maker_name(self):

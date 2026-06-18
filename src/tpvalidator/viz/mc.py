@@ -9,7 +9,7 @@ from rich.table import Table
 from typing import Literal, Optional
 from matplotlib.colors import LogNorm
 
-from ..detector_geometry import FDVDGeometry_1x8x14
+from ..detgeometry import FDVDGeometry_1x8x14
 from ..workspace import TriggerPrimitivesWorkspace
 
 

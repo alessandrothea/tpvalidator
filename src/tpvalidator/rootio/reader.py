@@ -218,50 +218,50 @@ class TriggerNtupleReader(NtupleReader):
         info_obj = self._root_file[f"{self.analyzer_dir}/{info_id}"]
         return json.loads(info_obj.members['fTitle'])
 
-    def read_tree_old(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
-        """Load an uproot TTree into a DataFrame.
+    # def read_tree_old(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
+    #     """Load an uproot TTree into a DataFrame.
 
-        Args:
-            tree_name: name or path of the tree in the ROOT file
-            trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
-            cut (str, optional): uproot cut expression to filter rows. Defaults to None.
-            branch_names (list, optional): branches to load. Defaults to None (all branches).
+    #     Args:
+    #         tree_name: name or path of the tree in the ROOT file
+    #         trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
+    #         cut (str, optional): uproot cut expression to filter rows. Defaults to None.
+    #         branch_names (list, optional): branches to load. Defaults to None (all branches).
 
-        Returns:
-            pd.DataFrame or None on error.
-        """
-        try:
-            tree_path = f"{self.analyzer_dir}/{tree_name}"
-            tree = self._root_file[tree_path]
-            _log.info(f"{tree_path} found with {tree.num_entries} ")
-            arr = tree.arrays(branch_names, library="ak", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
-            return ak.to_dataframe(arr)
-        except Exception as e:
-            _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
-            return None
+    #     Returns:
+    #         pd.DataFrame or None on error.
+    #     """
+    #     try:
+    #         tree_path = f"{self.analyzer_dir}/{tree_name}"
+    #         tree = self._root_file[tree_path]
+    #         _log.info(f"{tree_path} found with {tree.num_entries} ")
+    #         arr = tree.arrays(branch_names, library="ak", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
+    #         return ak.to_dataframe(arr)
+    #     except Exception as e:
+    #         _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
+    #         return None
 
-    def read_tree_np(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
-        """Load an uproot TTree into a DataFrame.
+    # def read_tree_np(self, tree_name: str, branch_names: Optional[list] = None, entry_start: Optional[int] = None, entry_stop: Optional[int] = None, cut: Optional[str] = None) -> Optional[pd.DataFrame]:
+    #     """Load an uproot TTree into a DataFrame.
 
-        Args:
-            tree_name: name or path of the tree in the ROOT file
-            trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
-            cut (str, optional): uproot cut expression to filter rows. Defaults to None.
-            branch_names (list, optional): branches to load. Defaults to None (all branches).
+    #     Args:
+    #         tree_name: name or path of the tree in the ROOT file
+    #         trg_dir (str, optional): directory containing the tree. Defaults to 'triggerAna'.
+    #         cut (str, optional): uproot cut expression to filter rows. Defaults to None.
+    #         branch_names (list, optional): branches to load. Defaults to None (all branches).
 
-        Returns:
-            pd.DataFrame or None on error.
-        """
-        try:
-            tree = self._root_file[f"{self.analyzer_dir}/{tree_name}"]
-            arr = tree.arrays(branch_names, library="np", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
-            df = pd.DataFrame(arr)
-            df = df.explode(list(df.select_dtypes(include='object').columns))
+    #     Returns:
+    #         pd.DataFrame or None on error.
+    #     """
+    #     try:
+    #         tree = self._root_file[f"{self.analyzer_dir}/{tree_name}"]
+    #         arr = tree.arrays(branch_names, library="np", entry_start=entry_start, entry_stop=entry_stop, cut=cut)
+    #         df = pd.DataFrame(arr)
+    #         df = df.explode(list(df.select_dtypes(include='object').columns))
 
-            return df
-        except Exception as e:
-            _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
-            return None
+    #         return df
+    #     except Exception as e:
+    #         _log.error(f"Error loading tree {tree_name} from {self.file_path}: {e}")
+    #         return None
 
 #-----
 

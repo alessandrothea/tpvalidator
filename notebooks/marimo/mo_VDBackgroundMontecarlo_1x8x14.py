@@ -18,7 +18,7 @@ with app.setup:
     from tpvalidator.utils import temporary_log_level, pandas_backend
     from tpvalidator.viz.textual import dataframe_to_rich_table
     from tpvalidator.viz.mc import MCPlotter
-    from tpvalidator.detector_geometry import FDVDGeometry_1x8x14
+    from tpvalidator.detgeometry import FDVDGeometry_1x8x14
 
 
 @app.cell(hide_code=True)

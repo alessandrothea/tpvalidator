@@ -17,6 +17,9 @@ class DatasetEntry(BaseModel):
     trg_file: str
     rawadc_file: Optional[str] = None
     label: Optional[str] = None
+    first_entry: Optional[int] = None
+    last_entry: Optional[int] = None
+
 
 
 class DataCatalogue(BaseModel):
@@ -77,7 +80,11 @@ def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[L
             continue
 
         print(f"Loading {name}")
-        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file, extra_info=cfg.dataset_info)
+        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file,
+                                                first_entry=entry.first_entry,
+                                                last_entry=entry.last_entry,
+                                                extra_info=cfg.dataset_info
+                                                )
         if entry.rawadc_file and load_rawadc:
             print(f"Adding {entry.rawadc_file}")
             ws.add_rawdigits(str(dataset_path / entry.rawadc_file))
@@ -96,6 +103,6 @@ def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[L
     return datasets
 
 
-def load(dataset_dir: str, load_rawadc:bool=True, selection: Optional[List[str]] = None) -> dict:
+def load(dataset_dir: str, selection: Optional[List[str]] = None, load_rawadc:bool=True, ) -> dict:
     """Load all datasets from a catalogue directory (convenience wrapper)."""
     return load_datasets(dataset_dir, load_rawadc, selection)

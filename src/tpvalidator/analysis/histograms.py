@@ -256,7 +256,7 @@ def compute_regaxis_specs(series: pd.Series, bin_size: int, direction: Literal['
             pass
         case 'int':
             lo=math.floor(lo)-0.5
-            hi=math.ceil(hi)+0.5
+            hi=math.ceil(hi)-0.5
         case _:
             raise ValueError(f"Invalid binning type '{binning_type}'")
 

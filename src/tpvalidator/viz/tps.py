@@ -12,7 +12,7 @@ from typing import Literal, Optional
 from rich.table import Table
 from matplotlib.colors import LogNorm
 
-from ..detector_geometry import FDVDGeometry_1x8x14
+from ..detgeometry import FDVDGeometry_1x8x14, get_by_geocfg_id
 from ..analysis.histograms import compute_regaxis_specs, cumsum_hist_nd, build_histogram, make_intcat_axis, make_strcat_axis
 from .textual import dataframe_to_rich_table
 
@@ -32,7 +32,7 @@ class TrgPrimitivesPlotter:
     def __init__(
         self,
         ws: TriggerPrimitivesWorkspace,
-        geo: Literal['1x8x14']='1x8x14'
+        # geo: Literal['1x8x14']='1x8x14'
     ):
         """Initialise the plotter.
 
@@ -40,8 +40,6 @@ class TrgPrimitivesPlotter:
         ----------
         ws:
             Workspace instance.
-        geo:
-            <to add>
 
         """
         self.ws = ws
@@ -53,19 +51,11 @@ class TrgPrimitivesPlotter:
         self._init_tp_origin_block_map()
 
         # Initialize geometry
-        self._init_det_geo(geo)
+        self._geo = get_by_geocfg_id(ws.info['geo']['detector'])
 
         # Make initialize var specs to allow tweaking
         self.var_specs = copy.deepcopy(self._default_var_specs)
-
     
-    def _init_det_geo(self, geo: Literal['1x8x14']):
-        # Private variables
-        match geo:
-            case '1x8x14':
-                self._geo = FDVDGeometry_1x8x14
-            case _:
-                raise ValueError(f'Illegal geo value. Received {geo} expected [1x8x14]')
 
     @property
     def geo(self):
@@ -179,24 +169,6 @@ class TrgPrimitivesPlotter:
 
         # TODO: generalize
         if event_filter:
-            # evf_collection = event_filter['collection']
-            # evf_filter = event_filter['filter']
-
-            # coll = self.ws.get_df(evf_collection)
-
-            # index_list = coll.query(evf_filter).index
-
-            # # Extract the top level
-            # # top_level = {idx[0] for idx in index_list}
-
-            # # df = df[df.index.get_level_values(0).isin({idx for idx in top_level})]
-
-
-            # # TODO: switch to using event_uid
-            # ev_uids = coll.query(evf_filter).event_uid.unique()
-            # df = df[df.event_uid.isin(ev_uids)]
-            
-            # print(f'MKH: evfilter "{evf_filter}": found {len(ev_uids)} entries')
 
             df = self._apply_event_filter(df, event_filter)
 
@@ -250,34 +222,34 @@ class TrgPrimitivesPlotter:
     
     
 
-    def make_cutsequence_hist_legacy(self, var:str, cuts: list[float], weight:str=None, ):
-        """Build a cumulative histogram over a variable-width cut sequence.
+    # def make_cutsequence_hist_legacy(self, var:str, cuts: list[float], weight:str=None, ):
+    #     """Build a cumulative histogram over a variable-width cut sequence.
 
-        Creates a 3-axis histogram (readout plane, backtracker signal flag, variable)
-        using explicit bin edges defined by ``cuts``, then computes the right-to-left
-        cumulative sum so each bin gives the count surviving that threshold and above.
+    #     Creates a 3-axis histogram (readout plane, backtracker signal flag, variable)
+    #     using explicit bin edges defined by ``cuts``, then computes the right-to-left
+    #     cumulative sum so each bin gives the count surviving that threshold and above.
 
-        Args:
-            var: Column name in the TP dataframe to use as the cut-sequence axis.
-            cuts: Explicit bin edges for the variable axis (monotonically increasing).
+    #     Args:
+    #         var: Column name in the TP dataframe to use as the cut-sequence axis.
+    #         cuts: Explicit bin edges for the variable axis (monotonically increasing).
 
-        Returns:
-            hist.Hist: Cumulative histogram with axes ``[readout_plane_id, bt_is_signal, var]``,
-                where each bin contains the count of entries with ``var >= bin_lower_edge``.
-        """
+    #     Returns:
+    #         hist.Hist: Cumulative histogram with axes ``[readout_plane_id, bt_is_signal, var]``,
+    #             where each bin contains the count of entries with ``var >= bin_lower_edge``.
+    #     """
 
-        var_axis = hist.axis.Variable(cuts, name=var)
+    #     var_axis = hist.axis.Variable(cuts, name=var)
 
-        rop_axis = make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
-        bt_sig_axis = make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
+    #     rop_axis = make_intcat_axis(self._df, 'readout_plane_id', label='Readout Plane')
+    #     bt_sig_axis = make_intcat_axis(self._df, 'bt_is_signal', label='Noise/Signal')
 
-        h_spec = [rop_axis, bt_sig_axis, var_axis]
-        h = build_histogram(self._df, h_spec, weight=weight)
+    #     h_spec = [rop_axis, bt_sig_axis, var_axis]
+    #     h = build_histogram(self._df, h_spec, weight=weight)
 
-        # Calculate the cumulative histogram
-        h_cs = cumsum_hist_nd(h, var, direction='right')
+    #     # Calculate the cumulative histogram
+    #     h_cs = cumsum_hist_nd(h, var, direction='right')
 
-        return h_cs
+    #     return h_cs
     
     def make_cutsequence_hist(self,
                             cut_var:str,
@@ -373,12 +345,18 @@ class TrgPrimitivesPlotter:
                 fmts = {
                     col_name:'{:.2f}'
                 }
+                fmts.update({
+                    f"{col_name}_rop{rop}":'{:.2f}' for rop in range(self.geo.num_readout_planes)
+                })
             case 'rate':
                 norm_unit = 1./ simu_time
                 col_name = 'rate'
                 fmts = {
-                    col_name:'{:.2f} HZ'
+                    col_name:'{:.2f} Hz'
                 }
+                fmts.update({
+                    f"{col_name}_rop{rop}":'{:.2f} Hz' for rop in range(self.geo.num_readout_planes)
+                })
             case _:
                 raise ValueError(f'Invalid normalisation {norm}')
         
@@ -396,10 +374,15 @@ class TrgPrimitivesPlotter:
         h_counts *= norm_unit*norm_geo
         det_name = self.geo.name if geo_norm=='default' else geo_norm
 
-        c_df = pd.DataFrame({
+        cols = {
             'generator': [l if len(l) > 0 else self._electronics_noise_label for l in h_counts.axes[0]],
             col_name: h_counts[:,sum].values()
+            }
+        cols.update({
+                f"{col_name}_rop{rop}":h_counts[:,rop*1j].values() for rop in range(self.geo.num_readout_planes)
             })
+
+        c_df = pd.DataFrame(cols)
         
 
         return dataframe_to_rich_table(c_df.sort_values(col_name, ascending=False),show_index=True, formatters=fmts, title=f'Rates per generator ({det_name})')
@@ -466,7 +449,6 @@ class TrgPrimitivesPlotter:
             
         h_var *= norm_unit*norm_geo
 
-        
         h2_var = h_var[{'readout_plane_id':rop}]
         s = h2_var.stack("bt_generator_name")
 

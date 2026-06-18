@@ -1,12 +1,13 @@
 from rich import print
-import tpvalidator.algo.tafinder
-import logging
+# import tpvalidator.algo.tafinder
+# import logging
 import click
 
-import tpvalidator.workspace as workspace
-from tpvalidator.utils import temporary_log_level
+# import tpvalidator.workspace as workspace
+# from tpvalidator.utils import temporary_log_level
 
-import tpvalidator.datasets.miniprod as miniprod
+# import tpvalidator.datasets.miniprod as miniprod
+import tpvalidator.datacatalogue as dctl
 import pandas as pd
 import tpvalidator.algo.tafinder.tpprocessor as tpprocessor
 
@@ -32,19 +33,23 @@ def test_writing(df: pd.DataFrame):
 
 
 @click.command()
-@click.argument('dataset-id')
+@click.argument('datasets-dir', type=str)
+@click.argument('dataset-id', type=str)
 @click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False))
-def main(dataset_id, outdir) -> int:
+def main(datasets_dir, dataset_id, outdir) -> int:
 
-    dn=[dataset_id]
+
+    # dn=[dataset_id]
     # dn=['radbkg']
 
 
-    datasets = miniprod.load_tp_presel_datasets(dn)
+    # datasets = miniprod.load_tp_presel_datasets(dn)
+    datasets = dctl.load(datasets_dir)
+
 
     print(f"Loaded {len(datasets)} datasets")
 
-    ws = datasets[dn[0]]
+    ws = datasets[dataset_id]
 
     em_tps = ws.tps
 
@@ -54,8 +59,8 @@ def main(dataset_id, outdir) -> int:
 
     taf_cfg = {
         'ta_inspect_sadc_min': 11000,
-        'ta_win_sadc_add_bkg': dataset_id != 'radbkg',
-        'ta_win_sadc_dist_file': miniprod.radbkg_tawin_dist_file
+        # 'ta_win_sadc_add_bkg': dataset_id != 'radbkg',
+        # 'ta_win_sadc_dist_file': miniprod.radbkg_tawin_dist_file
     }
 
     swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)

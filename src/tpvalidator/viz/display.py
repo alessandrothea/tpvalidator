@@ -2,6 +2,10 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+from tpvalidator.detgeometry import get_by_geocfg_id
 
 
 
@@ -31,8 +35,10 @@ class TriggerPrimitivesEventViewer:
         self.ws = ws
         self.tps = getattr(ws, df_labels['tps'])
         self.mctruths = getattr(ws, df_labels['mctruths'])
+        self.geo = get_by_geocfg_id(ws.info['geo']['detector'])
 
 
+    #----------
     def draw_tps_point_of_origin(self, ev_uid: int, ev_label: str = "", readout_view = 2, **kwargs) -> None:
         """Draw the trigger primitives point of origin, based on backtracked informations
 
@@ -90,6 +96,7 @@ class TriggerPrimitivesEventViewer:
         return fig
 
 
+    #----------
     def draw_tps(self, ev_uid: int, **kwargs):
 
         fig, ax = plt.subplots(**kwargs)
@@ -104,4 +111,43 @@ class TriggerPrimitivesEventViewer:
         fig.tight_layout()
 
 
+        return fig
+    
+
+
+    def decorate_tpc_coords(self):
+
+        tps = self.ws.tps.copy()
+        tps['tpc_view_channel'] = tps.channel.apply(lambda c: self.geo.tpc_view_channel(c)[1]).astype('int16')
+        tps[['tpc_j', 'tpc_k']] = pd.DataFrame(tps.TPCSetID.apply(self.geo.tpc_id_to_grid).tolist(), index=tps.index).rename({0:'tpc_j', 1:'tpc_k'}, axis=1)
+        tps['tpc_z_channel'] = (tps['tpc_view_channel']+self.geo.tpc_view_2_num_chans_sim*tps['tpc_k']).where(tps['readout_view'] == 2, -999999)
+
+
+        return tps
+    
+
+    def plot_yzt_event_view(self, ev_uid: int, ax:object=None):
+        
+        tps_event = self.ws.tps.query(f'event_uid == {ev_uid} & readout_plane_id == 2 & bt_is_signal==1').copy()
+        tps_event['tpc_view_channel'] = tps_event.channel.apply(lambda c: self.geo.tpc_view_channel(c)[1]).astype('int16')
+        tps_event[['tpc_j', 'tpc_k']] = pd.DataFrame(tps_event.TPCSetID.apply(self.geo.tpc_id_to_grid).tolist(), index=tps_event.index).rename({0:'tpc_j', 1:'tpc_k'}, axis=1)
+        tps_event['tpc_z_channel'] = (tps_event['tpc_view_channel']+self.geo.tpc_view_2_num_chans_sim*tps_event['tpc_k']).where(tps_event['readout_view'] == 2, -999999)
+
+        # TODO: cleanup
+        jmin, jmax = 0, self.geo.num_y_rows-1
+        n = self.geo.num_y_rows
+
+        tab10_colors = plt.get_cmap('tab20').colors
+        cmap = mcolors.ListedColormap(tab10_colors[:n])
+        norm = mcolors.BoundaryNorm(boundaries=np.arange(jmin-0.5, jmax + 0.5+1, 1), ncolors=n)
+
+
+        create_fig = ax is None
+        if create_fig:
+            fig, ax = plt.subplots() if create_fig else (ax.figure, ax)
+
+        tps_event.plot.scatter(x='tpc_z_channel', y='sample_start', c='tpc_j', cmap=cmap, norm=norm, ax=ax)
+
+        if create_fig:
+            fig.tight_layout()
         return fig
