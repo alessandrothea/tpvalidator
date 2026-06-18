@@ -1,6 +1,13 @@
-from tpvalidator.viz.tps import TrgPrimitivesPlotter
-from typing import Literal, Optional
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from typing import Literal, Optional
+
+from tpvalidator.viz.tps import TrgPrimitivesPlotter
+from tpvalidator.utils import subplots_autogrid
+from tpvalidator.viz.textual import dataframe_to_rich_table
+from tpvalidator.viz.utilities import figure_manager
+from tpvalidator.viz.efficiency import plot_roc
 
 
 class TPFilterAnalyser:
@@ -22,18 +29,17 @@ class TPFilterAnalyser:
             bkg_ws: Background workspace (radiological sample).
             sig_ws: Signal workspace (e-minus sample).
         """
-        self._bkd_ws = bkg_ws
+        self._bkg_ws = bkg_ws
         self._sig_ws = sig_ws
 
-
-        self.bkg_tpp = TrgPrimitivesPlotter(self._bkd_ws)
+        self.bkg_tpp = TrgPrimitivesPlotter(self._bkg_ws)
         self.sig_tpp = TrgPrimitivesPlotter(self._sig_ws)
 
 
     #----------
-    def _make_tpfilt_efficiency_df(self, 
-                            sample:Literal['sig', 'bkg'], 
-                            var:str, 
+    def _make_tpfilt_efficiency_df(self,
+                            sample:Literal['sig', 'bkg'],
+                            var:str,
                             var_cuts:list,
                             rop:int,
                             weight:Optional[str]=None,
@@ -55,7 +61,7 @@ class TPFilterAnalyser:
             TP column to cut on (e.g. ``'samples_over_threshold'``).
         var_cuts : list
             Ordered cut edges passed to ``make_cutsequence_hist``.
-        rop : int, optional
+        rop : int
             Readout-plane ID to slice (complex-number index into the histogram).
         weight : str, optional
             TP column to use as fill weight. Plain count when None.
@@ -86,7 +92,7 @@ class TPFilterAnalyser:
         # Build the cutsequence histogram for the chosen variable
         h_cs = tpp.make_cutsequence_hist(var, var_cuts, categories=['readout_plane_id', 'bt_is_signal', 'bt_generator_name'], weight=weight, query=query, event_filter=event_filter)
 
-        # Extract the sub-histogram fpr the selection of rop, signal and generator label (if chosen)
+        # Extract the sub-histogram for the selection of rop, signal and generator label (if chosen)
         # Note: counting backtracked TPs only here
         h_cs_rop = h_cs[rop*1j,1j,generator_sel if generator_sel is not None else sum,:]
 
@@ -97,7 +103,6 @@ class TPFilterAnalyser:
         cuts = dist_rop.axes[0].edges[:-1]
         eff = dist_rop.values()
         err_eff = dist_rop.variances()
-
 
         df_eff = pd.DataFrame({
             f'{var}_min': cuts,
@@ -134,7 +139,7 @@ class TPFilterAnalyser:
         """
 
         return self._make_tpfilt_efficiency_df('bkg', var, var_cuts, rop, weight=weight, query=query, generator_sel=generator_sel)
-    
+
 
     def make_tpfilt_sig_efficiency_df(self, var:str, var_cuts:list, rop:int=2, weight:Optional[str]=None, query:Optional[str]=None, event_filter:dict=None):
         """TP efficiency vs cut for the signal sample.
@@ -182,7 +187,7 @@ class TPFilterAnalyser:
         ke_bins : list of (int, int)
             Kinetic-energy ranges in MeV (converted to GeV internally).
             E.g. ``[(0, 5), (5, 10), (10, 20)]``.
-        rop : int, optional
+        rop : int
             Readout-plane ID.
         bkg_weight : str, optional
             Weight column for the background efficiency. Plain count when None.
@@ -200,7 +205,7 @@ class TPFilterAnalyser:
             ``err_tp_bkg_eff``, and one ``tp_eff`` / ``err_tp_eff`` pair per
             KE bin.
         """
-        
+
         df_eff = self.make_tpfilt_bkg_efficiency_df(var, var_cuts, rop, generator_sel=generator_sel, query=query, weight=bkg_weight)
         df_eff.rename(columns={'tp_eff':'tp_bkg_eff', 'err_tp_eff':'err_tp_bkg_eff'}, inplace=True)
 
@@ -210,47 +215,51 @@ class TPFilterAnalyser:
 
             # Explicitly rename columns before merge
             df_sig_eff.rename(columns={c:f'{c}_sig_{ke_min}_to_{ke_max}' for c in df_sig_eff.columns}, inplace=True)
-            
+
             df_eff = df_eff.merge(df_sig_eff, on=f'{var}_min')
 
         return df_eff
 
-    
+
 
     #----------
-    def make_sig_evfilt_counts_vs_ke_df(self, var:str, query:str=None, weight:str=None, var_cuts:list=[]):
+    def make_sig_evfilt_counts_vs_ke_df(self, var:str, query:Optional[str]=None, weight:Optional[str]=None, var_cuts:Optional[list]=None):
         """Build a per-event DataFrame of TP counts (or weighted sums) vs kinetic energy.
 
         Filters the signal TPs with *query*, then counts (or sums *weight*) per
-        event with no SOT cut (`nocut` column) and for each threshold in
-        *sot_cuts* (`cut_sot_ge_<N>` columns).  The result is joined to the MC
-        truth kinetic energy so each row represents one event.
+        event with no variable cut (``no_{var}_cut`` column) and for each
+        threshold in *var_cuts* (``{var}_min_{cut}`` columns).  The result is
+        joined to the MC truth kinetic energy so each row represents one event.
 
         Parameters
         ----------
+        var : str
+            TP column to cut on (e.g. ``'samples_over_threshold'``).
         query : str, optional
-            pandas query string applied to ``self._sig_ws.tps`` before grouping
+            pandas query string applied to signal TPs before grouping
             (e.g. ``'adc_peak > 45'``).  No pre-filter when None.
         weight : str, optional
             Column of ``tps`` to sum per event (e.g. ``'adc_integral'``).
             When None the plain TP count is used instead.
-        sot_cuts : list of int, optional
-            ``samples_over_threshold`` thresholds to apply sequentially.
-            Each value *N* adds a column ``cut_sot_ge_<N>`` with counts after
-            the ``samples_over_threshold >= N`` selection.
+        var_cuts : list of int, optional
+            Thresholds to apply sequentially. Each value *N* adds a column
+            ``{var}_min_{N}`` with counts after the ``{var} >= N`` selection.
 
         Returns
         -------
         pd.DataFrame
             One row per event with columns:
-            ``event_uid``, ``kinetic_energy``, ``nocut``,
-            and one ``cut_sot_ge_<N>`` column per entry in *sot_cuts*.
+            ``event_uid``, ``kinetic_energy``, ``no_{var}_cut``,
+            and one ``{var}_min_{N}`` column per entry in *var_cuts*.
         """
+        if var_cuts is None:
+            var_cuts = []
 
         ke = self._sig_ws.mctruths[['event_uid', 'kinetic_energy']].copy()
-        
-        tps = self._sig_ws.tps.query(f'(bt_is_signal == 1) & ({query})')
-        # tps = self._sig_ws.tps.query(f'({query})')
+
+        base_filter = 'bt_is_signal == 1'
+        full_filter = f'({base_filter}) & ({query})' if query is not None else base_filter
+        tps = self._sig_ws.tps.query(full_filter)
 
         # Decorate tps with event kinetic energy ( particle gun only)
         tps_evke = tps.merge(ke, on='event_uid')
@@ -281,7 +290,7 @@ class TPFilterAnalyser:
         return ke_tpc
 
 
-    # Plotting         
+    # Plotting
     #----------
     def plot_top_vars_by_generator(self, dataset:Literal['sig', 'bkg'], rop=2, figsize=(16,4), **kwargs):
         """Plot SOT, ADC peak, and ADC integral distributions broken down by generator.
@@ -302,7 +311,7 @@ class TPFilterAnalyser:
         match dataset:
             case 'sig':
                 tpp = self.sig_tpp
-            case 'bkg': 
+            case 'bkg':
                 tpp = self.bkg_tpp
             case _:
                 raise ValueError(f'Dataset {dataset} unknown')
@@ -316,7 +325,7 @@ class TPFilterAnalyser:
         fig.tight_layout()
 
         return fig
-    
+
 
     #----------
     def plot_peak_vs_sot(self, weight=None, ke_evf=None, rop=2, query:str=None, cmap:str=None, generator_selection='Ar39GenInLAr', zoom:Optional[dict]=None):
@@ -351,10 +360,9 @@ class TPFilterAnalyser:
 
         fig, axes = plt.subplots(3,2, figsize=(12,12))
 
-
         common_kwargs = {
-            'rop':rop, 
-            'weight': weight, 
+            'rop':rop,
+            'weight': weight,
             'cmap': cmap,
             'query': query
         }
@@ -369,7 +377,6 @@ class TPFilterAnalyser:
         ax.set_title('radiologicals (all)')
         ax.grid()
 
-
         ax = axes[row][1]
         bkg_tpp.plot_2d_var_dist(*common_args, bt_generator_name=generator_selection, ax=ax, **common_kwargs)
         ax.set_title('Ar39')
@@ -379,6 +386,8 @@ class TPFilterAnalyser:
 
         row=1
 
+        ke_evf_label = ke_evf["filter"] if ke_evf is not None else 'no ke filter'
+
         ax = axes[row][0]
         sig_tpp.plot_2d_var_dist(*common_args, ax=ax, **common_kwargs)
         ax.set_title('e-minus [zoom]')
@@ -386,7 +395,7 @@ class TPFilterAnalyser:
 
         ax = axes[row][1]
         sig_tpp.plot_2d_var_dist(*common_args, ev_filter=ke_evf, ax=ax, **common_kwargs)
-        ax.set_title(f'e-minus [zoom][{ke_evf["filter"]}]')
+        ax.set_title(f'e-minus [zoom][{ke_evf_label}]')
         ax.grid()
 
 
@@ -400,7 +409,7 @@ class TPFilterAnalyser:
 
         ax = axes[row][1]
         sig_tpp.plot_2d_var_dist(*common_args, ev_filter=ke_evf, ax=ax, **common_kwargs)
-        ax.set_title(f'e-minus [{ke_evf["filter"]}]')
+        ax.set_title(f'e-minus [{ke_evf_label}]')
         ax.grid()
 
 
@@ -413,7 +422,6 @@ class TPFilterAnalyser:
             ymin = zoom.get('ymin', None)
             ymax = zoom.get('ymax', None)
 
-
             for rax in axes[0:2]:
                 for ax in rax:
                     ax.set_xlim(xmin, xmax)
@@ -422,34 +430,19 @@ class TPFilterAnalyser:
         fig.suptitle("Trigger Primitives multiplicity in sadc and peak - zoom on the low-E region")
         fig.tight_layout()
 
-
         return fig
 
 
-
-
-
-from tpvalidator.utils import subplots_autogrid
-from tpvalidator.viz.textual import dataframe_to_rich_table
-from tpvalidator.viz.utilities import figure_manager
-from tpvalidator.viz.efficiency import plot_roc
-
-
-
-class DevTPFilterAnalyser (TPFilterAnalyser):
+class DevTPFilterAnalyser(TPFilterAnalyser):
     # TODO: define analyzer level variables for
     # - Filter variable
     # - Filter var cuts
     # - Readout plane (TBD)
     # - Weights (signal and background)
+    pass
 
-    def __init__(self, *args, **kwargs):
-        super(DevTPFilterAnalyser, self).__init__( *args, **kwargs)
-        
-#
-#
-#
-class SOTFilterAnalyser (DevTPFilterAnalyser):
+
+class SOTFilterAnalyser(DevTPFilterAnalyser):
     # TODO: define analyzer level variables for
     # - Filter variable
     # - Filter var cuts
@@ -458,7 +451,7 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
 
     #----------
     def __init__(self, *args, **kwargs):
-        super(DevTPFilterAnalyser, self).__init__( *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         first_sot=2
         last_sot=30
@@ -491,7 +484,7 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
 
     #----------
     def make_sot_tpfilt_sig_efficiency_df(self, rop:int, event_filter:dict):
-                
+
         return self.make_tpfilt_sig_efficiency_df(
             self.var,
             self.var_cuts,
@@ -513,10 +506,6 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
         )
 
     #------ Table functions -----------------------
-    def make_sop_tpfilt_efficiency_by_ke_df(self, rop:int):
-        return self.make_tpfilt_efficiency_by_ke_df(self.var, self.var_cuts, rop=rop, ke_bins=self.ke_bins, bkg_weight=self.bkg_weight, sig_weight=self.sig_weight, generator_sel=self.bkg_generator_sel, query=self.tp_query)
-
-
     def make_sot_bkg_eff_table(self, rop:int):
 
         df_rad_eff = self.make_sot_tpfilt_bkg_efficiency_df(rop=rop)
@@ -525,12 +514,12 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
         return t
 
     #------ Plotting functions -----------------------
-    def plot_signal_sot_tpfilt_counts_ke_matrix(self, 
+    def plot_signal_sot_tpfilt_counts_ke_matrix(self,
                                         rop:int=2,
                                         ax:object=None,
                                         **fig_kwargs
                                     ):
-        
+
         with figure_manager(ax, **fig_kwargs) as (fig, ax):
 
             for ke_min, ke_max in self.ke_bins:
@@ -539,7 +528,7 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
                 df_sig_eff.plot(y='tp_eff', yerr='err_tp_eff', ax=ax, label=f'{ke_min} < KE < {ke_max}', linestyle='--')
 
             ax.grid()
-# 
+
         return fig
 
     #----------
@@ -548,7 +537,7 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
                                     refcuts=[],
                                     figsize=(16,10)
                                 ):
-        
+
         df_eff = self.make_sot_tpfilt_efficiency_by_ke_df(rop=rop)
 
         sig_eff_cols = [c for c in df_eff.columns if c.startswith('tp_eff')]
@@ -561,18 +550,18 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
 
         fig.tight_layout()
 
+        return fig
 
 
     #----------
-    def plot_signal_sot_tpfilt_eff_by_ke(self, 
+    def plot_signal_sot_tpfilt_eff_by_ke(self,
                                     rop:int=2,
                                     ax:object=None,
                                     **fig_kwargs):
 
-
         with figure_manager(ax, **fig_kwargs) as (fig, ax):
 
-            df_eff = self.make_sop_tpfilt_efficiency_by_ke_df(rop=rop)
+            df_eff = self.make_sot_tpfilt_efficiency_by_ke_df(rop=rop)
 
             sig_eff_cols = [c for c in df_eff.columns if c.startswith('tp_eff')]
 
@@ -587,9 +576,9 @@ class SOTFilterAnalyser (DevTPFilterAnalyser):
             fig.suptitle("ROC as a function of the $e^{-}$ energy range")
 
         return fig
-    
+
     #----------
-    def plot_bkg_tpcounts_efficienct(self, rop:int, ax:object=None, **fig_kwargs):
+    def plot_bkg_tpcounts_efficiency(self, rop:int, ax:object=None, **fig_kwargs):
 
         df_rad_eff = self.make_sot_tpfilt_bkg_efficiency_df(rop=rop)
 
