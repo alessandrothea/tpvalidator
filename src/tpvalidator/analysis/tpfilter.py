@@ -504,6 +504,9 @@ class SOTFilterAnalyser(DevTPFilterAnalyser):
             query=self.tp_query,
             weight=self.bkg_weight
         )
+    
+    def make_sig_sot_evfilt_counts_vs_ke_df(self):
+        return self.make_sig_evfilt_counts_vs_ke_df(self.var,  var_cuts=self.var_cuts, query=self.tp_query, weight=self.sig_weight)
 
     #------ Table functions -----------------------
     def make_sot_bkg_eff_table(self, rop:int):

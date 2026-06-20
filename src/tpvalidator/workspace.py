@@ -24,7 +24,7 @@ class TrgDataFrame(pd.DataFrame):
         self.extra_info = {}
 
 
-class TriggerAnalysisWorkspace:
+class TriggerActivityWorkspace:
     """Workspace for loading TA-finder output trees (event_summary, mctruths,
     ta_event_selection, ta_win_cluster_stats, ta_clusters, tps_with_cluster_flags).
     """

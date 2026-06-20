@@ -38,13 +38,8 @@ def test_writing(df: pd.DataFrame):
 @click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False))
 def main(datasets_dir, dataset_id, outdir) -> int:
 
-
-    # dn=[dataset_id]
-    # dn=['radbkg']
-
-
     # datasets = miniprod.load_tp_presel_datasets(dn)
-    datasets = dctl.load(datasets_dir)
+    datasets = dctl.load(datasets_dir, selection=[dataset_id])
 
 
     print(f"Loaded {len(datasets)} datasets")
@@ -53,12 +48,11 @@ def main(datasets_dir, dataset_id, outdir) -> int:
 
     em_tps = ws.tps
 
-
     print("Processing tps")
     df_writer = tpprocessor.RootDFWriter(outdir + f'/{dataset_id}.root', 'taFinder')
 
     taf_cfg = {
-        'ta_inspect_sadc_min': 11000,
+        'ta_inspect_sadc_min': 8000,
         # 'ta_win_sadc_add_bkg': dataset_id != 'radbkg',
         # 'ta_win_sadc_dist_file': miniprod.radbkg_tawin_dist_file
     }

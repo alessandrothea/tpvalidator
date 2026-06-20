@@ -14,9 +14,9 @@ from tpvalidator.algo.tafinder.trigger_algs_numba import apply_dbscan
 #-----------------------
 
 default_cfg = {
-    'preselection': 'readout_view == 2 & samples_over_threshold >= 8',
+    'preselection': 'readout_view == 2 & samples_over_threshold >= 9',
     'ta_win_size': 1000,
-    'ta_win_start': 100,
+    'ta_win_start': 0,
     'ta_inspect_sadc_min': 7500,
     'ta_inspect_sadc_max': 50000,
     'ta_inspect_sadc_cluster_threshold': 7500,
@@ -120,6 +120,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
     def apply_preselection(self, tps_df: TrgDataFrame):
 
+        print(f"Applying '{self._cfg['preselection']}'")
         return tps_df.query(self._cfg['preselection'])
     
          
@@ -136,6 +137,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
     
         return tps_in_win
     
+
     def add_window_bkg_sadc(self, ta_window_stats: TrgDataFrame) -> TrgDataFrame:
 
         print("Adding sadc background offset to tawindows")
@@ -162,13 +164,17 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         from tqdm import tqdm
         tqdm.pandas(desc="TA Finding")
 
-        # print(ta_wins.index.to_frame(index=False).assign(_keep=True).set_index(self.tawin_keys))
-        tps_to_proc = tps_df.join(ta_wins.index.to_frame(index=False).assign(_keep=True).set_index(self.tawin_keys),
-                   on=self.tawin_keys)
-        # .fillna(False)#.astype("bool")
+        # add a _keep flag to TPs belonging to the selected windows
+        tps_to_proc = tps_df.join(
+            # from the list of selected TAs, create a temprary dataframe with a _keep flag, indexed on self.tawin_keys
+            ta_wins.index
+                .to_frame(index=False)
+                .assign(_keep=True)
+                .set_index(self.tawin_keys),
+            on=self.tawin_keys)
 
-        tps_to_proc = tps_to_proc[tps_to_proc._keep == True]
-
+        # Drop TPs w/o a true _keep flag
+        tps_to_proc = tps_to_proc[tps_to_proc._keep == True].drop('_keep', axis=1)
 
         epsilon=self._cfg['ta_dbscan_epsilon']
         min_neigh=self._cfg['ta_dbscan_min_neigh']
@@ -258,9 +264,12 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         tp_ids = ta_win_clustered.query('n_clusters > 0')[['tp_index','dbscan_label']].explode(['tp_index','dbscan_label'])
 
         # Join the dbscan_label to the tp dataset 
-        clustered_tps = tps_in_wins.join(tp_ids.set_index('tp_index'))
+        clustered_tps = tps_in_wins.join(tp_ids.set_index(pd.MultiIndex.from_tuples(tp_ids["tp_index"], names=["entry", "subentry"])).drop(columns="tp_index"))
+        # clustered_tps = tps_in_wins.join(tp_ids.set_index('tp_index'))
         with pd.option_context("future.no_silent_downcasting", True):
             clustered_tps['dbscan_label'] = clustered_tps.dbscan_label.fillna(-1).astype('int16')
+
+
         if self.writer:
             self.writer.write(clustered_tps, 'tps_with_cluster_flags')
 
