@@ -3,6 +3,7 @@ import logging
 import uproot
 import pandas as pd
 import numpy as np
+from abc import abstractmethod
 
 # from rich import print
 from typing import Optional, List, Tuple
@@ -24,12 +25,54 @@ class TrgDataFrame(pd.DataFrame):
         self.extra_info = {}
 
 
-class TriggerActivityWorkspace:
+class TriggerAnalysisWorkspace:
+    """Abstract base class for trigger workspaces.
+
+    Provides shared tree/dataframe registry, lazy loading, and attribute-style access.
+    Subclasses must define `tree_names` and implement `_load_dataframe(name)`.
+    """
+
+    _log = logging.getLogger('TriggerAnalysisWorkspace')
+    tree_names: list = []
+
+    def __init__(self):
+        self._trees: dict = {}
+        self._dataframes: dict = {}
+        self._event_list = None
+        self._df_decorators: dict = {}
+
+    def __getattr__(self, name):
+        if '_trees' in self.__dict__:
+            if name.endswith('_tree') and (base := name[:-5]) in self._trees:
+                return self._trees[base]
+            if '_dataframes' in self.__dict__ and name in self.tree_names:
+                return self._get_dataframe(name)
+        raise AttributeError(name)
+
+    def get_tree(self, name):
+        return self._trees[name]
+
+    def get_df(self, name) -> TrgDataFrame:
+        return self._get_dataframe(name)
+
+    def _get_dataframe(self, name) -> TrgDataFrame:
+        if name not in self._dataframes:
+            self._dataframes[name] = self._load_dataframe(name)
+            if name in self._df_decorators:
+                self._df_decorators[name]()
+        return self._dataframes[name]
+
+    @abstractmethod
+    def _load_dataframe(self, name) -> TrgDataFrame:
+        ...
+
+
+class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
     """Workspace for loading TA-finder output trees (event_summary, mctruths,
     ta_event_selection, ta_win_cluster_stats, ta_clusters, tps_with_cluster_flags).
     """
 
-    _log = logging.getLogger('TriggerAnalysisWorkspace')
+    _log = logging.getLogger('TriggerActivityWorkspace')
 
     tree_names = [
         'event_summary',
@@ -41,12 +84,9 @@ class TriggerActivityWorkspace:
     ]
 
     def __init__(self, data_path: str, base_folder=''):
-
+        super().__init__()
         self._base_folder = base_folder
         self._data_path = data_path
-        self._event_list = None
-        self._trees = {}
-        self._dataframes = {}
 
         with uproot.open(self._data_path) as f:
             for t in self.tree_names:
@@ -61,34 +101,13 @@ class TriggerActivityWorkspace:
                     ttree = None
                 self._trees[t] = ttree
 
-    def __getattr__(self, name):
-        if '_trees' in self.__dict__:
-            if name.endswith('_tree') and (base := name[:-5]) in self._trees:
-                return self._trees[base]
-            if name in self.tree_names:
-                return self._get_dataframe(name)
-        raise AttributeError(name)
-
-    def get_tree(self, name):
-        return self._trees[name]
-
-    def get_df(self, name) -> TrgDataFrame:
-        return self._get_dataframe(name)
-
-    def _load_dataframe(self, tree):
+    def _load_dataframe(self, name) -> TrgDataFrame:
         cut = None
-        df = TrgDataFrame(tree.arrays(library="np", cut=cut))
-        return df
-
-    def _get_dataframe(self, name) -> TrgDataFrame:
-        df = self._dataframes.get(name, None)
-        if df is None:
-            df = self._load_dataframe(self._trees[name])
-            self._dataframes[name] = df
+        df = TrgDataFrame(self._trees[name].arrays(library="np", cut=cut))
         return df
 
 
-class TriggerPrimitivesWorkspace:
+class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
     """Workspace for loading MC production TP files (trigger primitives,
     MC truth, neutrinos, particles, IDEs, rawadcs).
     """
@@ -107,6 +126,7 @@ class TriggerPrimitivesWorkspace:
 
     # TODO: add arguments to disable truth info loading
     def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
+        super().__init__()
 
         self._name = name if name is not None else data_path
         self._tuple_rdr = None
@@ -125,21 +145,18 @@ class TriggerPrimitivesWorkspace:
         # Don't forget to copy!
         self._extra_info = extra_info.copy()
 
-        # Trees, dataframes, and per-dataframe post-load decorators
-        self._trees = {}
-        self._dataframes = {}
+        # Per-dataframe post-load decorators
         self._df_decorators = {
             'tps': self._decorate_tps_dataframe,
         }
 
         # RawADCs registry
         self.rawdigis_events = []
-        
+
         self.rawdigits_hists = {}
         self._rawadcs = {}
 
         # Ancillary information
-        self._event_list = None
         self._mctruth_blocks = None
 
         # Initialize trees
@@ -203,40 +220,16 @@ class TriggerPrimitivesWorkspace:
             self._log.info(f"No {self._tps_folder} folder found")
 
 
-
-    def __getattr__(self, name):
-        if '_trees' in self.__dict__:
-            if name.endswith('_tree') and (base := name[:-5]) in self._trees:
-                return self._trees[base]
-            if '_dataframes' in self.__dict__ and name in self.tree_names:
-                return self._get_dataframe(name)
-        raise AttributeError(name)
-
-    def get_tree(self, name):
-        return self._trees[name]
-
-    def get_df(self, name) -> TrgDataFrame:
-        return self._get_dataframe(name)
-
-
-    def _get_dataframe(self, name) -> TrgDataFrame:
-        if name not in self._dataframes:
-            self._dataframes[name] = self._load_dataframe_with_event_cut(name)
-            if name in self._df_decorators:
-                self._df_decorators[name]()
-        return self._dataframes[name]
-
-
     @staticmethod
     def _get_event_id_list(tree):
-        # TODO: this should return 
+        # TODO: this should return
         # return tree.arrays(branches=['event', 'run', 'subrun'], library='pd').event.unique()
         return tree.to_df(branches=['event', 'run', 'subrun']).event.unique()
 
 
-    def _load_dataframe_with_event_cut(self, df_id: str) -> pd.DataFrame:
+    def _load_dataframe(self, name: str) -> TrgDataFrame:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
-        tree = self._trees[df_id]
+        tree = self._trees[name]
         df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
         if 'event_uid' not in df.columns:
             df['event_uid'] = df.run.astype("uint64")*1000000+df.subrun.astype("uint64")*100+df.event.astype("uint64")
@@ -278,7 +271,6 @@ class TriggerPrimitivesWorkspace:
     @property
     def mctruth_blocks_map(self):
         if self._mctruth_blocks is None:
-
 
             if 'mctruth_blockid_map' in self.info:
                 self._mctruth_blocks = dict(self.info['mctruth_blockid_map'])
@@ -327,7 +319,7 @@ class TriggerPrimitivesWorkspace:
             if obj_name.startswith('ADCsPlane') or obj_name.startswith('ADCsNoisePlane'):
                 self.rawdigits_hists[obj_name.split(';')[0]] = self._raw_tuple_rdr[k.split(';')[0]]
 
-        # TODO: 
+        # TODO:
         self._log.info("Load rawdigis event list")
         self.rawdigis_events = self._trees['rawdigits'].event_list()
         self._log.info(f"{len(self.rawdigis_events)} events found")
@@ -349,6 +341,5 @@ class TriggerPrimitivesWorkspace:
                 'channel_mask': channel_mask
             }
             self._rawadcs[ev_uid] = rwdf
-            
-            return self._rawadcs[ev_uid]
 
+            return self._rawadcs[ev_uid]
