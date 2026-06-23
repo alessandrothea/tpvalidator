@@ -11,6 +11,23 @@ from typing import Optional, List, Tuple
 from .rootio import TriggerNtupleReader, RawWaveformsNtupleReader
 
 
+# Helper method to rebuild the entry-subentry multindex, if needed
+def rebuild_dataframe_entry_index(df: pd.DataFrame, keys: list[str]):
+    # combine columns into a single tuple-key, rank densely to get 0-based entry index
+    entry_keys = df[keys].apply(tuple, axis=1)
+
+    df.index = pd.MultiIndex.from_arrays(
+        [
+            entry_keys.rank(method="dense").astype(int) - 1,  # entry
+            df.groupby(entry_keys).cumcount(),                 # subentry
+        ],
+        names=["entry", "subentry"],
+    )
+
+    return df
+
+
+
 class TrgDataFrame(pd.DataFrame):
     # normal properties
     _metadata = ["prod_info", 'extra_info']
@@ -78,6 +95,7 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
         'event_summary',
         'mctruths',
         'ta_event_selection',
+        'ta_win_stats',
         'ta_win_cluster_stats',
         'ta_clusters',
         'tps_with_cluster_flags'
@@ -87,24 +105,40 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
         super().__init__()
         self._base_folder = base_folder
         self._data_path = data_path
+        self._tuple_rdr = None
+        self._do_init()
 
-        with uproot.open(self._data_path) as f:
-            for t in self.tree_names:
-                self._log.info(f"Adding '{t}' data")
-                ttree_name = f"{self._base_folder}/{t}"
+    def _do_init(self):
+        self._log.info("Opening TA-finder output file")
+        self._tuple_rdr = TriggerNtupleReader(self._data_path, analyzer_dir=self._base_folder)
 
-                try:
-                    ttree = f[ttree_name]
-                    self._log.info(f"{ttree_name} found with {ttree.num_entries} rows")
-                except uproot.KeyInFileError:
-                    self._log.warning(f"Key '{ttree_name}' not found.")
-                    ttree = None
-                self._trees[t] = ttree
+        rootfile = self._tuple_rdr.file
+
+        self._log.debug(rootfile.keys())
+        self._log.info("Adding processing info")
+        self._info = self._tuple_rdr.get_info(self._info_name)
+        
+        for t in self.tree_names:
+            self._log.info(f"Adding '{t}' data")
+            try:
+                ttree = self._tuple_rdr.get_tree(t)
+            except uproot.KeyInFileError:
+                self._log.warning(f"Key '{t}' not found in file.")
+                ttree = None
+            self._trees[t] = ttree
 
     def _load_dataframe(self, name) -> TrgDataFrame:
-        cut = None
-        df = TrgDataFrame(self._trees[name].arrays(library="np", cut=cut))
+        # return TrgDataFrame(self._trees[name].to_df_np())
+        df = TrgDataFrame(self._trees[name].to_df())
+        print(df)
+        if df.index.names != ["entry", "subentry"]:
+
+            # Rebuild the multi index
+            keys = ['event', 'subrun', 'run']
+            df = rebuild_dataframe_entry_index(df, keys)
+
         return df
+        
 
 
 class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
@@ -178,9 +212,9 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         self._tuple_rdr = TriggerNtupleReader(self._data_path, analyzer_dir=self._analyzer_name)
 
         # Extract file handle for direct access to ROOT objects when needed
-        f = self._tuple_rdr.file
+        rootfile = self._tuple_rdr.file
 
-        self._log.debug(f.keys())
+        self._log.debug(rootfile.keys())
         self._log.info("Adding processing info")
         self._info = self._tuple_rdr.get_info(self._info_name)
 
@@ -196,9 +230,9 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
             self._trees[t] = ttree
 
         # Add trigger primitives
-        if self._tps_folder in f[f'{self._analyzer_name}']:
+        if self._tps_folder in rootfile[f'{self._analyzer_name}']:
 
-            tp_trees_folder = f[f'{self._analyzer_name}/{self._tps_folder}']
+            tp_trees_folder = rootfile[f'{self._analyzer_name}/{self._tps_folder}']
             if tps_key:
                 logging.info(f'Loading {tps_key}')
                 self._trees['tps'] = tp_trees_folder[tps_key]
@@ -230,11 +264,17 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
     def _load_dataframe(self, name: str) -> TrgDataFrame:
         """Load dataframe from the selected TTree, applying the event cut for this workspace."""
         tree = self._trees[name]
+
+        # Load the tree and convert it into a trigger dataframe
         df = TrgDataFrame(tree.to_df(entry_start=self._first_entry, entry_stop=self._last_entry))
+
+        # Decorate it with the event_uid if not present
         if 'event_uid' not in df.columns:
             df['event_uid'] = df.run.astype("uint64")*1000000+df.subrun.astype("uint64")*100+df.event.astype("uint64")
+
+        # Decorate the dataframe with information
         df.prod_info = self.info
-        df.extra_info = self._extra_info
+        df.extra_info = self.extra_info
         return df
 
 

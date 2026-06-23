@@ -324,6 +324,8 @@ if __name__ == "__main__":
                     for k in tree.keys()
                 }
                 print(f"  event {i}: {ev}")
-
-    os.unlink(out_path)
+            df = ak.to_dataframe(arrays)
+            print(df.dtypes)
+    # os.unlink(out_path)
+    print(out_path)
     print("\nDemo complete ✓")

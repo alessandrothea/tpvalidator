@@ -7,6 +7,7 @@ import os.path
 import uproot
 import numpy as np
 import pandas as pd
+import json
 
 
 from tpvalidator.algo.tafinder.trigger_algs_numba import apply_dbscan
@@ -59,8 +60,11 @@ class RootDFWriter:
         self._folder = rootfolder
 
         # Force recreation
-        with uproot.recreate(self._filename) as f:
-            f.mkdir(self._folder)
+        # with uproot.recreate(self._filename) as f:
+            # f.mkdir(self._folder)
+
+        self._rootfile = uproot.recreate(self._filename) 
+        self._rootfile.mkdir(self._folder)
 
 
     def write(self, df, treename):
@@ -71,18 +75,15 @@ class RootDFWriter:
         dtype_obj = np.dtype('O')
         branch_types = {k:(v if v != dtype_obj else np.dtype(str)) for k,v in branch_types.items()}
 
-        with uproot.update(self._filename) as f:
-            f[self._folder].mktree(treename, branch_types)
-            f[self._folder][treename].extend(branch_arrays)
+        # with uproot.update(self._filename) as f:
+        if treename not in self._rootfile[self._folder]:
+            self._rootfile[self._folder].mktree(treename, branch_types)
+        self._rootfile[self._folder][treename].extend(branch_arrays)
 
-
-
-
-
-
-
-
-
+    def writemeta(self, name:str, metadata:dict):
+        # with uproot.update(self._filename) as f:
+        #     f[self._folder][name] = json.dumps(metadata)
+        self._rootfile[self._folder][name] = json.dumps(metadata)
 
 from scipy.stats import rv_histogram
 import uproot
@@ -102,7 +103,9 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         self._cfg = default_cfg.copy()
         self._cfg.update(cfg)
 
-        self.tawin_keys = ['event_uid', 'event', 'run', 'subrun', 'TPCSetID', 'ta_win_id']
+        print(self._cfg)
+        self.entry_keys = ['event_uid', 'event', 'run', 'subrun']
+        self.tawin_keys = self.entry_keys+['TPCSetID', 'ta_win_id']
 
         # Load bakground window sadc distribution
         ta_win_sadc_dist_file = self._cfg.get('ta_win_sadc_dist_file', None)
@@ -202,8 +205,10 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
                 n_tps=('ta_win_id', "size"),
                 sadc=("adc_integral", "sum"),
                 channel_std =('channel', 'std'),
-                sample_peak_std =('sample_peak', 'std')
-            )
+                channel_mean =('channel', 'mean'),
+                sample_peak_std =('sample_peak', 'std'),
+                sample_peak_mean =('sample_peak', 'mean')
+            ).fillna(-1)
         )
 
         print(f"Window stats created ({len(ta_window_stats)} windows)")
@@ -252,7 +257,8 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         # Create per_event selection flags
         cluster_sadc_thres=self._cfg['ta_inspect_sadc_cluster_threshold']
-        ta_event_sel = ta_win_cluster_summary.groupby('event_uid', sort=False).apply(count_ta_wins, cluster_sadc_thres=cluster_sadc_thres)
+        # Create a event selection dataframe by grouping by 
+        ta_event_sel = ta_win_cluster_summary.groupby(self.entry_keys, sort=False).apply(count_ta_wins, cluster_sadc_thres=cluster_sadc_thres)
         # Add a global accept flag
         ta_event_sel['accepted'] = (ta_event_sel.num_accept_win > 0 ) | (ta_event_sel.num_inspect_accept_win > 0)
 

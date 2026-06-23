@@ -11,10 +11,10 @@ wheels/
 
 # Data ang generated files
 data/*
-*.pdf
 tmp/
 reports/
-
+*.pdf
+*.root
 # Marimo
 **/__marimo__/
 

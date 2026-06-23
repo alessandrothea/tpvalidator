@@ -103,6 +103,31 @@ def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[L
     return datasets
 
 
-def load(dataset_dir: str, selection: Optional[List[str]] = None, load_rawadc:bool=True, ) -> dict:
+def load(dataset_dir: str, selection: Optional[List[str]] = None, load_rawadc:bool=True ) -> dict:
     """Load all datasets from a catalogue directory (convenience wrapper)."""
     return load_datasets(dataset_dir, load_rawadc, selection)
+
+
+def iterdataset_xp(dataset_dir, dataset_name, num_entries, load_rawadc:bool=False):
+
+    d = _resolve_dir(dataset_dir)
+    cfg = parse(dataset_dir)
+    print(cfg)
+    dataset_path = d / cfg.dataset_path
+    if dataset_name not in cfg.datasets_spec:
+        raise KeyError(f'Dataset {dataset_name} not found in {dataset_dir}')
+    
+    dataset = cfg.datasets_spec[dataset_name]
+    ws = workspace.TriggerPrimitivesWorkspace(dataset_path / dataset.trg_file)
+    
+    total_num_entries = ws.num_entries
+    del ws
+    print(f"Found {total_num_entries} entries")
+
+    first_entry = dataset.first_entry if dataset.first_entry is not None else 0
+    last_entry = dataset.last_entry if dataset.last_entry is not None else total_num_entries
+
+    for i in range(first_entry, last_entry, num_entries):
+        print(i, i+num_entries)
+        yield workspace.TriggerPrimitivesWorkspace(dataset_path / dataset.trg_file, first_entry=i, last_entry=i+num_entries)
+    return None

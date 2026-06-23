@@ -35,18 +35,9 @@ def test_writing(df: pd.DataFrame):
 @click.command()
 @click.argument('datasets-dir', type=str)
 @click.argument('dataset-id', type=str)
-@click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False))
-def main(datasets_dir, dataset_id, outdir) -> int:
-
-    # datasets = miniprod.load_tp_presel_datasets(dn)
-    datasets = dctl.load(datasets_dir, selection=[dataset_id])
-
-
-    print(f"Loaded {len(datasets)} datasets")
-
-    ws = datasets[dataset_id]
-
-    em_tps = ws.tps
+@click.option('-b', '--batch-size', type=int, default=1000, help='Size of processing batches')
+@click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False), help='Output folder')
+def main(datasets_dir, dataset_id, batch_size,  outdir) -> int:
 
     print("Processing tps")
     df_writer = tpprocessor.RootDFWriter(outdir + f'/{dataset_id}.root', 'taFinder')
@@ -59,13 +50,15 @@ def main(datasets_dir, dataset_id, outdir) -> int:
 
     swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)
 
+    for i, ws in enumerate(dctl.iterdataset_xp(datasets_dir, dataset_id, batch_size)):
+        tps = ws.tps
+        swtaf.process(tps)
 
-    swtaf.process(em_tps)
+        if ws.mctruths_tree:
+            df_writer.write(ws.mctruths, 'mctruths')
+        df_writer.write(ws.event_summary, 'event_summary')
 
-    if ws.mctruths_tree:
-        df_writer.write(ws.mctruths, 'mctruths')
-    df_writer.write(ws.event_summary, 'event_summary')
-
+    df_writer.writemeta('info', ws.info)
 
 
     return 0

@@ -282,7 +282,7 @@ class FDVDGeometry:
     def det_volume(self) -> float:
         return self.tpc_volume() * self.num_tpcs
 
-    def anode_surface(self) -> float:
+    def tpc_anode_surface(self) -> float:
         tpc = self.geo().tpcs[0]
         return tpc.y_range.length * tpc.z_range.length / 1e4
 

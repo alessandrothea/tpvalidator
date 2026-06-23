@@ -33,8 +33,8 @@ def _():
     | CRP volume | {4*FDVDGeometry_1x8x14.tpc_volume():.2f} $m^3$|
     | Detector volume | {FDVDGeometry_1x8x14.det_volume():.2f} $m^3$|
     | Detector/Cryostat ratio | {FDVDGeometry_1x8x14.det_volume()/FDVDGeometry_1x8x14.cryo_volume():.2f}|
-    | TPC Anode surface | {FDVDGeometry_1x8x14.anode_surface():.2f} $m^2$
-    | CRP surface | {4*FDVDGeometry_1x8x14.anode_surface():.2f} $m^2$
+    | TPC Anode surface | {FDVDGeometry_1x8x14.tpc_anode_surface():.2f} $m^2$
+    | CRP surface | {4*FDVDGeometry_1x8x14.tpc_anode_surface():.2f} $m^2$
     """)
     return
 
