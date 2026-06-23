@@ -20,7 +20,9 @@ def _iter_batch_params(datasets_dir, dataset_id, batch_size):
     entry = cfg.datasets_spec[dataset_id]
     trg_file = dataset_path / entry.trg_file
 
-    ws = workspace.TriggerPrimitivesWorkspace(trg_file)
+    print(entry)
+
+    ws = workspace.TriggerPrimitivesWorkspace(trg_file, first_entry=entry.first_entry, last_entry=entry.last_entry)
     total = ws.num_entries
     del ws
     print(f"Found {total} entries")
@@ -29,7 +31,7 @@ def _iter_batch_params(datasets_dir, dataset_id, batch_size):
     last = entry.last_entry if entry.last_entry is not None else total
 
     for batch_idx, i in enumerate(range(first, last, batch_size)):
-        yield trg_file, batch_idx, i, i + batch_size
+        yield trg_file, batch_idx, i, (i + batch_size if i + batch_size < last else last)
 
 
 def _process_batch(trg_file, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg):
@@ -64,15 +66,20 @@ def main(datasets_dir, dataset_id, batch_size, outdir, num_workers) -> int:
 
     batch_params = list(_iter_batch_params(datasets_dir, dataset_id, batch_size))
 
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = {
-            executor.submit(_process_batch, trg_file, batch_idx, first_entry, last_entry,
-                            outdir, dataset_id, taf_cfg): batch_idx
-            for trg_file, batch_idx, first_entry, last_entry in batch_params
-        }
-        for future in as_completed(futures):
-            future.result()
 
+    if len(batch_params) > 1:
+        print('Entering in processpool mode')
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            futures = {
+                executor.submit(_process_batch, trg_file, batch_idx, first_entry, last_entry,
+                                outdir, dataset_id, taf_cfg): batch_idx
+                for trg_file, batch_idx, first_entry, last_entry in batch_params
+            }
+            for future in as_completed(futures):
+                future.result()
+    else:
+        trg_file, batch_idx, first_entry, last_entry = batch_params[0]
+        _process_batch(trg_file, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg)
     return 0
 
 

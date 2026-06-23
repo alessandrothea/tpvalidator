@@ -267,11 +267,14 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         # Create a TP collection with clustering flags (only clustered windows)
         # Select TA windows with >0 clusters and explode the tp_index and dbscan columns
-        tp_ids = ta_win_clustered.query('n_clusters > 0')[['tp_index','dbscan_label']].explode(['tp_index','dbscan_label'])
+        tp_idxs = ta_win_clustered.query('n_clusters > 0')[['tp_index','dbscan_label']].explode(['tp_index','dbscan_label'])
+
+        # Select trigger primitives that are in inspect windows only (to save space)
+        tps_in_inspect_wins = tps_in_wins[pd.MultiIndex.from_frame(tps_in_wins[self.tawin_keys]).isin(ta_inspect_windows.index)]
 
         # Join the dbscan_label to the tp dataset 
-        clustered_tps = tps_in_wins.join(tp_ids.set_index(pd.MultiIndex.from_tuples(tp_ids["tp_index"], names=["entry", "subentry"])).drop(columns="tp_index"))
-        # clustered_tps = tps_in_wins.join(tp_ids.set_index('tp_index'))
+        clustered_tps = tps_in_inspect_wins.join(tp_idxs.set_index(pd.MultiIndex.from_tuples(tp_idxs["tp_index"], names=["entry", "subentry"])).drop(columns="tp_index"))
+
         with pd.option_context("future.no_silent_downcasting", True):
             clustered_tps['dbscan_label'] = clustered_tps.dbscan_label.fillna(-1).astype('int16')
 
