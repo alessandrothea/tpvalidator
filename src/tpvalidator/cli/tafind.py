@@ -20,8 +20,6 @@ def _iter_batch_params(datasets_dir, dataset_id, batch_size):
     entry = cfg.datasets_spec[dataset_id]
     trg_file = dataset_path / entry.trg_file
 
-    print(entry)
-
     ws = workspace.TriggerPrimitivesWorkspace(trg_file, first_entry=entry.first_entry, last_entry=entry.last_entry)
     total = ws.num_entries
     del ws

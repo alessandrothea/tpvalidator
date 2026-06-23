@@ -100,6 +100,7 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
         'ta_clusters',
         'tps_with_cluster_flags'
     ]
+    _info_name = 'info'
 
     def __init__(self, data_path: str, base_folder=''):
         super().__init__()
@@ -157,6 +158,7 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         'simide_summary',
         'tps',
     ]
+    _info_name = 'info'
 
     # TODO: add arguments to disable truth info loading
     def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
@@ -168,7 +170,6 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         # Labels and ROOT object paths
         self._analyzer_name = analyzer_name
         self._tps_folder  = tps_folder
-        self._info_name = 'info'
 
         self._rawdigits_tree_name: str = 'rawdigis_tree'
 

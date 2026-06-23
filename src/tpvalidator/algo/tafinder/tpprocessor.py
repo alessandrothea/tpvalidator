@@ -105,7 +105,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         print(self._cfg)
         self.entry_keys = ['event_uid', 'event', 'run', 'subrun']
-        self.tawin_keys = self.entry_keys+['TPCSetID', 'ta_win_id']
+        self.tawin_keys = self.entry_keys+['TPCSetID', 'readout_plane_id', 'ta_win_id']
 
         # Load bakground window sadc distribution
         ta_win_sadc_dist_file = self._cfg.get('ta_win_sadc_dist_file', None)

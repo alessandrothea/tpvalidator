@@ -218,7 +218,7 @@ class TriggerNtupleReader(NtupleReader):
         info_obj = self._root_file[f"{self.analyzer_dir}/{info_id}"]
         match info_obj.classname:
             case 'TObjString':
-                info = json.loads(info_obj.string)
+                info = json.loads(info_obj)
             case 'TNamed':
                 info = json.loads(info_obj.members['fTitle'])
             case _:
