@@ -1,67 +1,80 @@
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 from rich import print
-# import tpvalidator.algo.tafinder
-# import logging
 import click
 
-# import tpvalidator.workspace as workspace
-# from tpvalidator.utils import temporary_log_level
-
-# import tpvalidator.datasets.miniprod as miniprod
 import tpvalidator.datacatalogue as dctl
-import pandas as pd
+import tpvalidator.workspace as workspace
 import tpvalidator.algo.tafinder.tpprocessor as tpprocessor
 
-import numpy as np
 
-def test_writing(df: pd.DataFrame):
-    import timeit
-    
-    start_time = timeit.default_timer()
-    df.to_feather('xxx.feather')
-    end_time = timeit.default_timer()
-    print(f"Dataset write time to feather: {end_time - start_time}")
+def _iter_batch_params(datasets_dir, dataset_id, batch_size):
+    """Yield (trg_file_path, batch_idx, first_entry, last_entry) for each batch."""
+    d = Path(datasets_dir)
+    cfg = dctl.parse(datasets_dir)
+    dataset_path = d / cfg.dataset_path
 
-    start_time = timeit.default_timer()
-    df = pd.read_feather('xxx.feather')
-    end_time = timeit.default_timer()
-    print(f"Dataset Load time from feather: {end_time - start_time}")
+    if dataset_id not in cfg.datasets_spec:
+        raise KeyError(f'Dataset {dataset_id} not found in {datasets_dir}')
 
-    start_time = timeit.default_timer()
-    df_to_root_typed(df, 'zzz.root', treename='tps')
-    end_time = timeit.default_timer()
-    print(f"saved TTree file : {end_time - start_time}")
+    entry = cfg.datasets_spec[dataset_id]
+    trg_file = dataset_path / entry.trg_file
+
+    ws = workspace.TriggerPrimitivesWorkspace(trg_file)
+    total = ws.num_entries
+    del ws
+    print(f"Found {total} entries")
+
+    first = entry.first_entry if entry.first_entry is not None else 0
+    last = entry.last_entry if entry.last_entry is not None else total
+
+    for batch_idx, i in enumerate(range(first, last, batch_size)):
+        yield trg_file, batch_idx, i, i + batch_size
 
 
-@click.command()
+def _process_batch(trg_file, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg):
+    output_path = f'{outdir}/{dataset_id}_{batch_idx:04d}.root'
+    df_writer = tpprocessor.RootDFWriter(output_path, 'taFinder')
+    swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)
+
+    ws = workspace.TriggerPrimitivesWorkspace(trg_file, first_entry=first_entry, last_entry=last_entry)
+    swtaf.process(ws.tps)
+
+    if ws.mctruths_tree:
+        df_writer.write(ws.mctruths, 'mctruths')
+    df_writer.write(ws.event_summary, 'event_summary')
+    df_writer.writemeta('info', ws.info)
+
+    print(f"Batch {batch_idx:04d} done → {output_path}")
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument('datasets-dir', type=str)
 @click.argument('dataset-id', type=str)
 @click.option('-b', '--batch-size', type=int, default=1000, help='Size of processing batches')
 @click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False), help='Output folder')
-def main(datasets_dir, dataset_id, batch_size,  outdir) -> int:
+@click.option('-n', '--num-workers', type=int, default=1, help='Number of worker processes')
+def main(datasets_dir, dataset_id, batch_size, outdir, num_workers) -> int:
 
-    print("Processing tps")
-    df_writer = tpprocessor.RootDFWriter(outdir + f'/{dataset_id}.root', 'taFinder')
+    print(f"Processing tps  [workers={num_workers}]")
 
     taf_cfg = {
         'ta_inspect_sadc_min': 8000,
-        # 'ta_win_sadc_add_bkg': dataset_id != 'radbkg',
-        # 'ta_win_sadc_dist_file': miniprod.radbkg_tawin_dist_file
     }
 
-    swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)
+    batch_params = list(_iter_batch_params(datasets_dir, dataset_id, batch_size))
 
-    for i, ws in enumerate(dctl.iterdataset_xp(datasets_dir, dataset_id, batch_size)):
-        tps = ws.tps
-        swtaf.process(tps)
-
-        if ws.mctruths_tree:
-            df_writer.write(ws.mctruths, 'mctruths')
-        df_writer.write(ws.event_summary, 'event_summary')
-
-    df_writer.writemeta('info', ws.info)
-
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(_process_batch, trg_file, batch_idx, first_entry, last_entry,
+                            outdir, dataset_id, taf_cfg): batch_idx
+            for trg_file, batch_idx, first_entry, last_entry in batch_params
+        }
+        for future in as_completed(futures):
+            future.result()
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

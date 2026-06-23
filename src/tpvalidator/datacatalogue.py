@@ -116,10 +116,10 @@ def iterdataset_xp(dataset_dir, dataset_name, num_entries, load_rawadc:bool=Fals
     dataset_path = d / cfg.dataset_path
     if dataset_name not in cfg.datasets_spec:
         raise KeyError(f'Dataset {dataset_name} not found in {dataset_dir}')
-    
+
     dataset = cfg.datasets_spec[dataset_name]
     ws = workspace.TriggerPrimitivesWorkspace(dataset_path / dataset.trg_file)
-    
+
     total_num_entries = ws.num_entries
     del ws
     print(f"Found {total_num_entries} entries")
