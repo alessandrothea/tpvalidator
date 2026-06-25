@@ -46,7 +46,8 @@ dependencies = [
 ]
 
 [project.scripts]
-ta-finder = "tpvalidator.cli.tafind:main"
+ta-finder = "tpvalidator.cli.tafinder:main"
+tawin-util = "tpvalidator.cli.tawinutil:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tpvalidator"]

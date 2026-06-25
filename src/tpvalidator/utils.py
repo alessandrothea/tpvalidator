@@ -71,7 +71,7 @@ def calculate_trg_obj_rates(trg_df: pd.DataFrame, readout_window: int = None) ->
     The estimate is only reliable for well-populated samples.
     """
     sampling_time = 0.5e-6  # Sampling time 1/2 usec
-    readout_window = trg_df.extra_info['readout_window'] if readout_window is None else readout_window
+    readout_window = trg_df.info['detector_properties']['readout_window'] if readout_window is None else readout_window
     num_entries = trg_df.extra_info['num_entries']
     if not readout_window:
         raise ValueError(f"Invalid readout window")

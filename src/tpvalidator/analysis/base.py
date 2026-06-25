@@ -25,8 +25,8 @@ class TrgWorkspaceAnalyzer:
         """
         
         sampling_time = 0.5e-6  # Sampling time 1/2 usec
-        ro_win = self.ws.extra_info['readout_window']
-        num_entries = self.ws.extra_info['num_entries']
+        ro_win = self.ws.info['detector_properties']['readout_window']
+        num_entries = self.ws.num_entries
         return ro_win * sampling_time * num_entries
 
     @property

@@ -39,7 +39,7 @@ def load_tp_presel_datasets( selection=None ):
     datasets = {}
     for s, p in datasets_spec.items():
         with temporary_log_level(workspace.TriggerPrimitivesWorkspace._log, logging.WARN):
-            ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / p, extra_info=dataset_info)
+            ws = workspace.TriggerPrimitivesWorkspace(miniprod_dir / p, dataset_info=dataset_info)
         print(f"Dataset '{s}': {ws.num_entries} events")
         print(ws.info)
         datasets[s] = ws

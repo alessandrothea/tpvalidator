@@ -52,11 +52,18 @@ class TriggerAnalysisWorkspace:
     _log = logging.getLogger('TriggerAnalysisWorkspace')
     tree_names: list = []
 
+       
     def __init__(self):
         self._trees: dict = {}
         self._dataframes: dict = {}
         self._event_list = None
         self._df_decorators: dict = {}
+
+    def _init_extra_info(self):
+        self._extra_info = {
+            'num_entries': self.num_entries,
+            'event_list': self.event_list,
+        }
 
     def __getattr__(self, name):
         if '_trees' in self.__dict__:
@@ -84,6 +91,7 @@ class TriggerAnalysisWorkspace:
         ...
 
 
+
 class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
     """Workspace for loading TA-finder output trees (event_summary, mctruths,
     ta_event_selection, ta_win_cluster_stats, ta_clusters, tps_with_cluster_flags).
@@ -94,6 +102,7 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
     tree_names = [
         'event_summary',
         'mctruths',
+        'simide_summary',
         'ta_event_selection',
         'ta_win_stats',
         'ta_win_cluster_stats',
@@ -102,12 +111,15 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
     ]
     _info_name = 'info'
 
-    def __init__(self, data_path: str, base_folder=''):
+    def __init__(self, data_path: str, base_folder='taFinder', first_entry: int = None, last_entry: int = None):
         super().__init__()
         self._base_folder = base_folder
         self._data_path = data_path
         self._tuple_rdr = None
+        self._first_entry = first_entry
+        self._last_entry = last_entry
         self._do_init()
+        self._init_extra_info()
 
     def _do_init(self):
         self._log.info("Opening TA-finder output file")
@@ -128,18 +140,50 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
                 ttree = None
             self._trees[t] = ttree
 
-    def _load_dataframe(self, name) -> TrgDataFrame:
-        # return TrgDataFrame(self._trees[name].to_df_np())
-        df = TrgDataFrame(self._trees[name].to_df())
-        print(df)
-        if df.index.names != ["entry", "subentry"]:
 
+
+    def _load_dataframe(self, name) -> TrgDataFrame:
+        df = TrgDataFrame(self._trees[name].to_df())
+
+        # Rebuild the index if flattened
+        if df.index.names != ["entry", "subentry"]:
             # Rebuild the multi index
             keys = ['event', 'subrun', 'run']
             df = rebuild_dataframe_entry_index(df, keys)
 
+
+        # Decorate it with the event_uid if not present
+        if 'event_uid' not in df.columns:
+            df['event_uid'] = df.run.astype("uint64")*1000000+df.subrun.astype("uint64")*100+df.event.astype("uint64")
+
         return df
-        
+    
+    @property
+    def info(self):
+        return self._info
+
+    #
+    # Workspace properties
+    #
+    @property
+    def num_entries(self) -> int:
+        """Number of events in the workspace, based on the event_summary tree."""
+        return len(self.event_list)
+
+    @property
+    def event_list(self) -> pd.DataFrame:
+        """DataFrame of events in the workspace, with columns ``event``, ``run``, and ``subrun``.
+
+        Lazily loaded from the ``event_summary`` tree on first access. Respects the
+        ``first_entry`` / ``last_entry`` slice configured at construction time.
+        """
+        if self._event_list is None:
+            self._event_list = self._trees['event_summary'].to_df(
+                branches=['event', 'run', 'subrun'],
+                entry_start=self._first_entry,
+                entry_stop=self._last_entry
+            )
+        return self._event_list
 
 
 class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
@@ -161,7 +205,7 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
     _info_name = 'info'
 
     # TODO: add arguments to disable truth info loading
-    def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', extra_info: dict = {}):
+    def __init__(self, data_path: str, name:str=None, first_entry: int=None, last_entry: int = None, tps_key : str = None, analyzer_name: str = 'triggerAna', tps_folder: str = 'TriggerPrimitives', dataset_info: dict = {}, rawadc_file: str = None):
         super().__init__()
 
         self._name = name if name is not None else data_path
@@ -178,7 +222,7 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         self._last_entry = last_entry
 
         # Don't forget to copy!
-        self._extra_info = extra_info.copy()
+        self._dataset_info = dataset_info.copy()
 
         # Per-dataframe post-load decorators
         self._df_decorators = {
@@ -197,10 +241,9 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         # Initialize trees
         self._do_init(tps_key)
 
-        self._extra_info.update({
-            'num_entries': self.num_entries,
-            'event_list': self.event_list,
-        })
+
+        if rawadc_file is not None:
+            self.add_rawdigits(str(rawadc_file))
 
 
 
@@ -218,6 +261,9 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
         self._log.debug(rootfile.keys())
         self._log.info("Adding processing info")
         self._info = self._tuple_rdr.get_info(self._info_name)
+
+        # Update 
+        self._info.update(self._dataset_info)
 
         standard_trees = [t for t in self.tree_names if t != 'tps']
 
@@ -253,6 +299,8 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
             self._log.info(f"{self._tps_tree_name} found")
         else:
             self._log.info(f"No {self._tps_folder} folder found")
+
+        self._init_extra_info()
 
 
     @staticmethod
@@ -303,11 +351,9 @@ class TriggerPrimitivesWorkspace(TriggerAnalysisWorkspace):
     def extra_info(self):
         return self._extra_info
 
-
     @property
     def tp_maker_name(self):
         return self._tps_tree_name.replace('_', ':')
-
 
     @property
     def mctruth_blocks_map(self):

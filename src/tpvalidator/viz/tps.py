@@ -71,7 +71,7 @@ class TrgPrimitivesPlotter:
         """
         
         sampling_time = 0.5e-6  # Sampling time 1/2 usec
-        ro_win = self._df.extra_info['readout_window']
+        ro_win = self._df.info['detector_properties']['readout_window']
         num_entries = self._df.extra_info['num_entries']
         return ro_win * sampling_time * num_entries
 
@@ -568,7 +568,7 @@ class TrgPrimitivesPlotterV0:
         """
         
         sampling_time = 0.5e-6  # Sampling time 1/2 usec
-        ro_win = self.df.extra_info['readout_window']
+        ro_win = self.df.info['detector_properties']['readout_window']
         num_entries = self.df.extra_info['num_entries']
         return ro_win * sampling_time * num_entries
 

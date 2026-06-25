@@ -68,37 +68,55 @@ def list_datasets(dataset_dir: str) -> List[str]:
     return list(parse(dataset_dir).datasets_spec.keys())
 
 
-def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[List[str]] = None) -> dict:
-    """Load workspace objects for each dataset (optionally filtered by *selection*)."""
+def get_workspace_args(dataset_dir: str, selection: Optional[List[str]] = None) -> dict:
+    """Parse the catalogue and return constructor kwargs for each dataset's TriggerPrimitivesWorkspace.
+
+    Returns a dict mapping dataset name to a dict with keys:
+      ``trg_file``, ``rawadc_file`` (resolved Path or None), ``first_entry``,
+      ``last_entry``, and ``dataset_info``.
+    """
     d = _resolve_dir(dataset_dir)
     cfg = parse(dataset_dir)
     dataset_path = d / cfg.dataset_path
-    datasets = {}
+    result = {}
     for name, entry in cfg.datasets_spec.items():
         if selection and name not in selection:
-            print(f"Workspace {name} skipped")
             continue
+        result[name] = dict(
+            trg_file=dataset_path / entry.trg_file,
+            rawadc_file=dataset_path / entry.rawadc_file if entry.rawadc_file else None,
+            first_entry=entry.first_entry,
+            last_entry=entry.last_entry,
+            dataset_info=cfg.dataset_info,
+        )
+    return result
 
+
+def load_datasets(dataset_dir: str, load_rawadc:bool=True, selection: Optional[List[str]] = None) -> dict:
+    """Load workspace objects for each dataset (optionally filtered by *selection*)."""
+    cfg = parse(dataset_dir)
+    datasets = {}
+    for name, args in get_workspace_args(dataset_dir, selection=selection).items():
         print(f"Loading {name}")
-        ws = workspace.TriggerPrimitivesWorkspace(dataset_path / entry.trg_file,
-                                                first_entry=entry.first_entry,
-                                                last_entry=entry.last_entry,
-                                                extra_info=cfg.dataset_info
-                                                )
-        if entry.rawadc_file and load_rawadc:
-            print(f"Adding {entry.rawadc_file}")
-            ws.add_rawdigits(str(dataset_path / entry.rawadc_file))
+        ws = workspace.TriggerPrimitivesWorkspace(
+            args['trg_file'],
+            first_entry=args['first_entry'],
+            last_entry=args['last_entry'],
+            dataset_info=args['dataset_info'],
+            rawadc_file=args['rawadc_file'] if load_rawadc else None,
+        )
         print(f"Dataset '{name}': {ws.num_entries} events")
         print(ws.info)
         datasets[name] = ws
 
     if cfg.tp_cut:
+        print('[yellow]Deprecation warning[/yellow]')
         for ws in datasets.values():
             ws.tps.query(cfg.tp_cut, inplace=True)
 
     if cfg.tp_info_update:
         for ws in datasets.values():
-            ws.tps.extra_info.update(cfg.tp_info_update)
+            ws.tps._info.update(cfg.tp_info_update)
 
     return datasets
 

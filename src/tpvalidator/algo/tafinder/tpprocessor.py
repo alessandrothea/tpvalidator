@@ -10,7 +10,7 @@ import pandas as pd
 import json
 
 
-from tpvalidator.algo.tafinder.trigger_algs_numba import apply_dbscan
+from tpvalidator.algo.tafinder.dbscan_numba import apply_dbscan
 
 #-----------------------
 
@@ -20,7 +20,7 @@ default_cfg = {
     'ta_win_start': 0,
     'ta_inspect_sadc_min': 7500,
     'ta_inspect_sadc_max': 50000,
-    'ta_inspect_sadc_cluster_threshold': 7500,
+    'ta_inspect_cluster_sadc_threshold': 7500,
     'ta_win_sadc_dist_file': None,
     'ta_win_sadc_dist_rdm_seed': 123,
     'ta_win_sadc_add_bkg': False,
@@ -113,7 +113,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         if ta_win_sadc_dist_file:
             print(f"Loading '{ta_win_sadc_dist_file}'")
             with uproot.open(ta_win_sadc_dist_file) as f:
-                h1 = f["h1"].to_hist()
+                h1 = f["h_tawin_sadc"].to_hist()
 
                 # extract histogram info
                 counts = h1.view()
@@ -220,26 +220,29 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
         # Add window selection flag (inspect/direct accept)
         ta_window_with_flags = self.select_windows(ta_window_stats)
 
-        if self.writer:
-            self.writer.write(ta_window_with_flags.reset_index(), 'ta_win_stats')
-
+        # if self.writer:
+        #     self.writer.write(ta_window_with_flags.reset_index(), 'ta_win_stats')
 
         # Select the windoes to be inspected (clustered)
         ta_inspect_windows = ta_window_with_flags.query('sadc_window_thres_lo == True & sadc_window_thres_hi == False')
 
         # Add cluster information and dbscan lables to windows
-        ta_win_clustered = self.process_windows(ta_inspect_windows, tps_in_wins)
+        ta_inspect_win_clustered = self.process_windows(ta_inspect_windows, tps_in_wins)
+
 
         # Create a sub-dataset without cluster details, onlu summary info
         ta_win_cluster_summary = (
             ta_window_with_flags
             .join(
-                ta_win_clustered
+                ta_inspect_win_clustered
                 .drop(['tp_index', 'dbscan_label'], axis=1)
                 .set_index(self.tawin_keys)
                 )
-            ).fillna(0.0)
-        
+            ).fillna(0)
+            # ).fillna(-9999)
+
+        if self.writer:
+            self.writer.write(ta_win_cluster_summary.reset_index(), 'ta_win_stats')        
 
         # Create an event-dataset with ta-selection counts for the 2 categories
         def count_ta_wins( g: pd.DataFrame, cluster_sadc_thres ):
@@ -252,11 +255,10 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
                 'num_inspect_accept_win': ((g.sadc_window_thres_hi == False) & (g.sadc_window_thres_lo == True) & (g.max_cluster_sadc > cluster_sadc_thres)).sum()
             }) 
 
-        if self.writer:
-            self.writer.write(ta_win_cluster_summary.reset_index(), 'ta_win_cluster_stats')
+
 
         # Create per_event selection flags
-        cluster_sadc_thres=self._cfg['ta_inspect_sadc_cluster_threshold']
+        cluster_sadc_thres=self._cfg['ta_inspect_cluster_sadc_threshold']
         # Create a event selection dataframe by grouping by 
         ta_event_sel = ta_win_cluster_summary.groupby(self.entry_keys, sort=False).apply(count_ta_wins, cluster_sadc_thres=cluster_sadc_thres)
         # Add a global accept flag
@@ -267,7 +269,7 @@ class SwiftTAFinder(TriggerPrimitivesProcessor):
 
         # Create a TP collection with clustering flags (only clustered windows)
         # Select TA windows with >0 clusters and explode the tp_index and dbscan columns
-        tp_idxs = ta_win_clustered.query('n_clusters > 0')[['tp_index','dbscan_label']].explode(['tp_index','dbscan_label'])
+        tp_idxs = ta_inspect_win_clustered.query('n_clusters > 0')[['tp_index','dbscan_label']].explode(['tp_index','dbscan_label'])
 
         # Select trigger primitives that are in inspect windows only (to save space)
         tps_in_inspect_wins = tps_in_wins[pd.MultiIndex.from_frame(tps_in_wins[self.tawin_keys]).isin(ta_inspect_windows.index)]
