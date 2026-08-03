@@ -73,6 +73,14 @@ class TriggerAnalysisWorkspace:
                 return self._get_dataframe(name)
         raise AttributeError(name)
 
+    def __dir__(self):
+        names = list(super().__dir__())
+        if '_trees' in self.__dict__:
+            loaded = [k for k, v in self._trees.items() if v is not None]
+            names += [f'{k}_tree' for k in loaded]
+            names += [n for n in self.tree_names if n in loaded]
+        return names
+
     def get_tree(self, name):
         return self._trees[name]
 
@@ -105,7 +113,6 @@ class TriggerActivityWorkspace(TriggerAnalysisWorkspace):
         'simide_summary',
         'ta_event_selection',
         'ta_win_stats',
-        'ta_win_cluster_stats',
         'ta_clusters',
         'tps_with_cluster_flags'
     ]

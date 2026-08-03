@@ -26,7 +26,11 @@ def dataframe_to_rich_table(
         t_row = [str(row[0])] if show_index else []
         r = row._asdict()
         for c in pandas_dataframe.columns:
-            fmt = formatters.get(c, None)
+            if isinstance(formatters, dict):
+                fmt = formatters.get(c, None)
+            else:
+                fmt = formatters
+
             if callable(fmt):
                 t_row.append(fmt(r[c]))
             elif fmt is not None:

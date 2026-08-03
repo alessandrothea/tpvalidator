@@ -23,6 +23,10 @@ class Range1D:
     @property
     def length(self) -> float:
         return self.max - self.min
+    
+    @property
+    def center(self) -> float:
+        return self.min+self.length/2
 
 
 @dataclass(frozen=True)
@@ -38,7 +42,21 @@ class BoxVolume:
 
 
 @dataclass(frozen=True)
+class TPC:
+    id: int
+    origin: Point3D
+    x_range: Range1D
+    y_range: Range1D
+    z_range: Range1D
+
+    @property
+    def volume_m3(self) -> float:
+        return self.x_range.length * self.y_range.length * self.z_range.length / 1e6
+
+
+@dataclass(frozen=True)
 class OpDet:
+    id: int
     origin: Point3D
     height: float
     length: float
@@ -53,8 +71,20 @@ class OpDet:
 class GeoData:
     detector_name: str
     cryostat: BoxVolume
-    tpcs: tuple
-    opdets: tuple
+    tpcs: tuple  # tuple[TPC]
+    opdets: tuple  # tuple[OpDet]
+
+    def tpc_by_id(self, tpc_id: int) -> "TPC":
+        for tpc in self.tpcs:
+            if tpc.id == tpc_id:
+                return tpc
+        raise KeyError(f"No TPC with id={tpc_id}")
+
+    def opdet_by_id(self, opdet_id: int) -> "OpDet":
+        for opdet in self.opdets:
+            if opdet.id == opdet_id:
+                return opdet
+        raise KeyError(f"No OpDet with id={opdet_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -74,13 +104,24 @@ def _parse_box(d: dict) -> BoxVolume:
     )
 
 
+def _parse_tpc(d: dict) -> TPC:
+    return TPC(
+        id=d["id"],
+        origin=_parse_point(d["origin"]),
+        x_range=Range1D(min=d["x_range"]["min"], max=d["x_range"]["max"]),
+        y_range=Range1D(min=d["y_range"]["min"], max=d["y_range"]["max"]),
+        z_range=Range1D(min=d["z_range"]["min"], max=d["z_range"]["max"]),
+    )
+
+
 def _parse_geodata(d: dict) -> GeoData:
     return GeoData(
         detector_name=d["detector_name"],
         cryostat=_parse_box(d["cryostat"]),
-        tpcs=tuple(_parse_box(t) for t in d["tpcs"]),
+        tpcs=tuple(_parse_tpc(t) for t in d["tpcs"]),
         opdets=tuple(
             OpDet(
+                id=o["id"],
                 origin=_parse_point(o["origin"]),
                 height=o["height"],
                 length=o["length"],
@@ -90,6 +131,9 @@ def _parse_geodata(d: dict) -> GeoData:
         ),
     )
 
+def load_geodata(geo_file:str ) -> GeoData:
+    text = files("tpvalidator.data.geo").joinpath(geo_file).read_text()
+    return _parse_geodata(json.loads(text))
 
 # ---------------------------------------------------------------------------
 # FDVDGeometry
@@ -207,6 +251,22 @@ class FDVDGeometry:
         _, num_y, _ = self.tpc_geo
         k, j = divmod(tpc_id, num_y)
         return (j, k)
+    
+    def grid_to_tpc_id(self, j, k):
+        """Return the flat TPC index for grid coordinates (j, k).
+
+        Inverse of `tpc_id_to_grid`. The flat index is computed as j + k*num_y,
+        where num_y is the number of TPCs along the y direction.
+
+        Args:
+            j: Grid index along y.
+            k: Grid index along x.
+
+        Returns:
+            Zero-based flat TPC index.
+        """
+        _, num_y, _ = self.tpc_geo
+        return j+k*num_y
 
     def tpc_channel(self, channel):
         """Return the within-TPC channel index from a global channel number.
