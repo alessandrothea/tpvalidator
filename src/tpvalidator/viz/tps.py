@@ -71,8 +71,9 @@ class TrgPrimitivesPlotter:
         """
         
         sampling_time = 0.5e-6  # Sampling time 1/2 usec
-        ro_win = self._df.info['detector_properties']['readout_window']
-        num_entries = self._df.extra_info['num_entries']
+        print(self.ws.info)
+        ro_win = self.ws.info['detector_properties']['readout_window']
+        num_entries = self.ws.num_entries
         return ro_win * sampling_time * num_entries
 
     def _init_tp_origin_block_map(self):
