@@ -2,6 +2,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from rich import print
 import click
+import json
 
 import tpvalidator.datacatalogue as dctl
 import tpvalidator.workspace as workspace
@@ -26,12 +27,18 @@ def _iter_batch_params(datasets_dir, dataset_id, batch_size):
     first = first_entry if first_entry is not None else 0
     last = last_entry if last_entry is not None else total
 
+    if batch_size is None:
+        batch_size = last - first
+
     for batch_idx, i in enumerate(range(first, last, batch_size)):
         yield trg_file, ws_info, batch_idx, i, (i + batch_size if i + batch_size < last else last)
 
 
-def _process_batch(trg_file, ws_info, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg):
-    output_path = f'{outdir}/{dataset_id}_{batch_idx:04d}.root'
+def _process_batch(trg_file, ws_info, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg, num_batches=1):
+    if num_batches > 1:
+        output_path = f'{outdir}/{dataset_id}_{batch_idx:04d}.root'
+    else:
+        output_path = f'{outdir}/{dataset_id}.root'
     df_writer = tpprocessor.RootDFWriter(output_path, 'taFinder')
     swtaf = tpprocessor.SwiftTAFinder(df_writer=df_writer, cfg=taf_cfg)
 
@@ -58,31 +65,31 @@ def _process_batch(trg_file, ws_info, batch_idx, first_entry, last_entry, outdir
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument('datasets-dir', type=str)
 @click.argument('dataset-id', type=str)
-@click.option('-b', '--batch-size', type=int, default=1000, help='Size of processing batches')
+@click.option('-b', '--batch-size', type=int, default=None, help='Size of processing batches (default: whole dataset in one batch)')
 @click.option('-o', '--outdir', default='.', type=click.Path(exists=True, file_okay=False), help='Output folder')
 @click.option('-n', '--num-workers', type=int, default=1, help='Number of worker processes')
-def main(datasets_dir, dataset_id, batch_size, outdir, num_workers) -> int:
+@click.option('-c', '--config', 'config_file', type=click.Path(exists=True, dir_okay=False), default=None, help='JSON file with taFinder configuration (overrides defaults)')
+def main(datasets_dir, dataset_id, batch_size, outdir, num_workers, config_file) -> int:
 
     print(f"Processing tps  [workers={num_workers}]")
 
-    taf_cfg = {
-        'ta_inspect_sadc_min': 8000,
-        'ta_win_sadc_dist_file': 'ta-win-sadc-vd-1x8x14-radbkg.root',
-        'ta_win_sadc_add_bkg': True,
-        'ta_inspect_cluster_sadc_threshold': 20750,
-        'ta_dbscan_min_neigh': 2
-    }
+    taf_cfg = {}
+    if config_file is not None:
+        with open(config_file) as f:
+            taf_cfg = json.load(f)
 
     batch_params = list(_iter_batch_params(datasets_dir, dataset_id, batch_size))
     print(batch_params)
 
 
-    if len(batch_params) > 1:
+    num_batches = len(batch_params)
+
+    if num_batches > 1:
         print('Entering in processpool mode')
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {
                 executor.submit(_process_batch, trg_file, ws_info, batch_idx, first_entry, last_entry,
-                                outdir, dataset_id, taf_cfg): batch_idx
+                                outdir, dataset_id, taf_cfg, num_batches): batch_idx
                 for trg_file, ws_info, batch_idx, first_entry, last_entry in batch_params
             }
             for future in as_completed(futures):
@@ -90,7 +97,7 @@ def main(datasets_dir, dataset_id, batch_size, outdir, num_workers) -> int:
     else:
         trg_file, ws_info, batch_idx, first_entry, last_entry = batch_params[0]
         print(">>>>", trg_file, ws_info, batch_idx, first_entry, last_entry)
-        _process_batch(trg_file, ws_info, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg)
+        _process_batch(trg_file, ws_info, batch_idx, first_entry, last_entry, outdir, dataset_id, taf_cfg, num_batches)
     return 0
 
 
